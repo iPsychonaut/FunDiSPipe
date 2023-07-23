@@ -78,7 +78,6 @@ def index_fastq_with_minibar(input_fastq, path_to_minibar, path_to_minibar_index
 
 # Function to generate consensus 
 def consensus_align_with_ngspeciesid(input_fastq, primers_text_path):
-    print(f'\nGenerating raw alignment and consensus reads for {input_fastq} with NGSpeciesID...')     
     output_folder = input_fastq.replace('.fastq','_NGSequenceID')
     # Check if the output file already exists
     if os.path.isdir(output_folder):
