@@ -7,8 +7,8 @@ Created on Wed Jul 19 2023
 This is a module intended to be used as a part of a pipeline.
 
 This can be used individually by calling the command:
-    python /path/to/fundis_summarize.py -i /path/to/input_dir -p 80
-    python /path/to/fundis_summarize.py --input_dir /path/to/input_dir --percent_system_use 80
+    python /path/to/fundis_summarize.py -i /path/to/input_dir -p 50
+    python /path/to/fundis_summarize.py --input /path/to/input_dir --percent_system_use 50
 """
 from Bio import SeqIO
 import pandas as pd
@@ -17,10 +17,44 @@ import glob
 import shutil
 from tqdm import tqdm
 import argparse
+import platform
+
+# Function to determine which Operating System the code is being executed in
+def check_os():
+    global environment_dir
+    global environment_cmd_prefix
+    # Determine the operating system in use
+    # os.name will return 'posix', 'nt', or 'java' 
+    os_name = os.name  
+    # platform.system() will return 'Linux', 'Windows', 'Java', etc.
+    platform_system = platform.system()  
+    
+    # If the operating system is Windows (identified by 'nt' from os.name or 'Windows' from platform.system())
+    if os_name == 'nt' or platform_system == 'Windows':
+        # Set the working directory to "E:" (or whatever drive letter is appropriate for your Windows system)
+        environment_dir = "E:"
+        # For running Linux commands in Windows Subsystem for Linux (WSL), prefix the command with "wsl " 
+        environment_cmd_prefix = "wsl "
+    
+    # If the operating system is Linux (identified by 'posix' from os.name or 'Linux' from platform.system())
+    elif os_name == 'posix' or platform_system == 'Linux':
+        # Set the working directory to "/mnt/e" (or whatever the corresponding path is in your Linux system)
+        environment_dir = "/mnt/e"  
+    
+    else:
+        # If the operating system is neither Windows nor Linux, raise an Exception
+        raise Exception("ERROR: OS NOT TESTED WITH THIS CODE.")
+    
+    # Print out the detected operating system and the determined environment directory
+    print(f'Operating System: {platform_system}')
+    print(f'Environment Directory: {environment_dir}')
+    return environment_dir
 
 # Function to take in a folder containined processed NGSequenceID folders and generate a summary folder for MycoMap
 def mycomap_summarize_ngsid_dir(ngsid_dir):
-    print('\nGenerating MycoMap summary folder for {ngsid_dir}...')
+    if '.fastq' in ngsid_dir:
+        ngsid_dir = ngsid_dir.replace('.fastq','_minibar_NGSID')
+    print(f'\nGenerating MycoMap summary folder for {ngsid_dir}...')
     # Create the summary and FASTQ directories if they don't exist
     summary_dir = ngsid_dir.replace("_minibar_NGSID","_Summary")
     
@@ -28,27 +62,23 @@ def mycomap_summarize_ngsid_dir(ngsid_dir):
     stats_df = pd.DataFrame(columns=['Filename', 'Length', 'Reads in Consensus', 'Multiple'])
     
     # Get all directories in the ngsid_dir
-    sample_dirs = [d for d in os.listdir(ngsid_dir) if os.path.isdir(os.path.join(ngsid_dir, d))]
+    sample_dirs = [d for d in os.listdir(ngsid_dir) if os.path.isdir(os.path.join(ngsid_dir, d))]    
     
+    # Generate storage folders
     fastq_dir = f"{summary_dir}/FASTQ Files"
     os.makedirs(summary_dir, exist_ok=True)
     os.makedirs(fastq_dir, exist_ok=True)
     
-    # MAKE LOOK THROUGH SAMPLE DIR IN SAMPLE DIRS
+    # Look through current_sample_dir in sample_dirs
     for current_sample_dir in tqdm(sample_dirs):
-        #current_sample_dir = "E:/Fundis/TEST/sample_HS_ONT03_03_35-HAY-F-001900-iNat155234876-Agaricomycetes_NGSequenceID"
         current_sample_dir = f'{ngsid_dir}/{current_sample_dir}'
         base_name = current_sample_dir.split("sample_")[-1]
         
-        # get all directories in the path that match the pattern
+        # Establish main variables and directories for processing
         consensus_dirs = [entry.path for entry in os.scandir(current_sample_dir) if entry.is_dir() and entry.name.startswith('consensus_reference_') and any(os.scandir(entry.path))]
-        
         consensus_dirs = [entry.replace("\\","/") for entry in consensus_dirs]
-        
         consensus_fastq_list = []
-        
         medaka_count = 1
-        
         reads_in_consensus = 0
         
         for consensus_dir in consensus_dirs:
@@ -156,23 +186,29 @@ def mycomap_summarize_ngsid_dir(ngsid_dir):
                 # Write the updated records to the combined fasta file
                 SeqIO.write(records, combined_fasta_file, 'fasta')
                 
-def main(args):
-    # Set the path to the folder containing the fastq files
-    percent_system_use = float(args.percent_system_use)/100 if args.percent_system_use else 0.8
-    input_dir = args.input_dir if args.input_dir else os.path.dirname(os.path.realpath(__file__))
-    mycomap_summarize_ngsid_dir(input_dir)
-    print('PASS: Successfully summarized NGSequenceID Folder for MycoMap upload')
+def summarize(args):
+    try:
+        # Global environment_dir
+        environment_dir = ""
+        environment_cmd_prefix = ""
+        environment_dir = check_os()
+        main_working_dir = os.getcwd()
+        
+        # Set the path to the folder containing the fastq files
+        percent_system_use = float(args.percent_system_use)/100 if args.percent_system_use else 0.5
+        input_dir = args.input if args.input else os.path.dirname(os.path.realpath(__file__))
+        mycomap_summarize_ngsid_dir(input_dir)
+        print('PASS: Successfully summarized NGSequenceID Folder for MycoMap upload')
+        return True
+    
+    except Exception as e:
+        print(f"ERROR: There was a problem in summarize: {str(e)}")
+        return False
 
 if __name__ == "__main__":
-    # Global environment_dir
-    environment_dir = ""
-    environment_cmd_prefix = ""
-    environment_dir = check_os()
-    main_working_dir = os.getcwd()
-    
     # Parse user arguments
     parser = argparse.ArgumentParser(description="Process NGSpeciesID source folder.")
-    parser.add_argument('-i','--input_dir', type=str, help='Path to the NGSpeciesID source folder')
+    parser.add_argument('-i','--input', type=str, help='Path to the NGSpeciesID source folder')
     parser.add_argument('-p','--percent_system_use', type=str, help='Percent system use written as integer.')
     args = parser.parse_args()    
-    main(args)
+    summarize(args)
