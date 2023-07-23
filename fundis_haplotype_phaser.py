@@ -7,8 +7,8 @@ Created on Wed Jul 19 2023
 This is a module intended to be used as a part of a pipeline.
 
 This can be used individually by calling the command: 
-    python /path/to/fundis_haplotype_phaser.py -i /path/to/input_dir -p 80
-    python /path/to/fundis_haplotype_phaser.py --input_dir /path/to/input_dir --percent_system_use 80
+    python /path/to/fundis_haplotype_phaser.py -i /path/to/input_dir -p 50
+    python /path/to/fundis_haplotype_phaser.py --input /path/to/input_dir --percent_system_use 50
 """
 
 import os
@@ -181,38 +181,46 @@ def analyze_ngspeciesid_folder(ngspeciesid_dir):
     return True
  
 # Main entry point of the script
-def main(args):
-    # Define the main directory based on the argument or use a default value
-    input_dir = args.input_dir if args.input_dir else '/mnt/e/Fundis/NGSpeciesID-20230719T211158Z-001/NGSpeciesID'
-    percent_system_use = float(args.percent_system_use)/100 if args.percent_system_use else 0.8
-    
-    # Get the number of CPUs and calculate the number of threads
-    num_cpus = multiprocessing.cpu_count()
-    cpu_threads = int(math.floor(num_cpus * percent_system_use))
-    
-    # Get a list of all folders in the main directory, excluding folders named '__Summary__' or '_Summary'
-    folder_list = [f.path for f in os.scandir(input_dir) if f.is_dir() and '__Summary__' not in f.path and '_Summary' not in f.path]
-    
+def haplotype_phaser(args):
     try:
-        # Initialize a multiprocessing pool and process all folders
-        with multiprocessing.Pool(cpu_threads) as pool:
-            pool.map(analyze_ngspeciesid_folder, folder_list)
-    except queue.Empty:
-        print("Queue is empty. All Pipeline tasks have been processed.")
-    finally:
-        print('PASS: Haplotypes phased for all RiC >=9 conesensus fasta for each sample in NGSPeciesID input_dir\n')
+        # Global environment_dir
+        environment_dir = ""
+        environment_cmd_prefix = ""
+        environment_dir = check_os()
+        main_working_dir = os.getcwd()
+        
+        # Define the main directory based on the argument or use a default value
+        input_dir = args.input if args.input else '/mnt/e/Fundis/NGSpeciesID-20230719T211158Z-001/NGSpeciesID'
+        if '.fastq' in input_dir:
+            input_dir = input_dir.replace('.fastq','_minibar_NGSID')
+        percent_system_use = float(args.percent_system_use)/100 if args.percent_system_use else 0.5
+        
+        # Get the number of CPUs and calculate the number of threads
+        num_cpus = multiprocessing.cpu_count()
+        cpu_threads = int(math.floor(num_cpus * percent_system_use))
+        
+        # Get a list of all folders in the main directory, excluding folders named '__Summary__' or '_Summary'
+        folder_list = [f.path for f in os.scandir(input_dir) if f.is_dir() and '__Summary__' not in f.path and '_Summary' not in f.path]
+        
+        try:
+            # Initialize a multiprocessing pool and process all folders
+            with multiprocessing.Pool(cpu_threads) as pool:
+                pool.map(analyze_ngspeciesid_folder, folder_list)
+        except queue.Empty:
+            print("Queue is empty. All Pipeline tasks have been processed.")
+        finally:
+            print('PASS: Haplotypes phased for each conesensus fasta and sample in NGSPeciesID input_dir\n')
+            return True
+        
+    except Exception as e:
+        print(f"ERROR: There was a problem in haplotype_phaser: {str(e)}")
+        return False
 
 # If this script is the main entry point, parse the arguments and call the main function
-if __name__ == "__main__":
-    # Global environment_dir
-    environment_dir = ""
-    environment_cmd_prefix = ""
-    environment_dir = check_os()
-    main_working_dir = os.getcwd()
-    
+if __name__ == "__main__":    
     # Parse user arguments
     parser = argparse.ArgumentParser(description="Process NGSpeciesID main folder.")
-    parser.add_argument('-i','--input_dir', type=str, help='Path to the NGSpeciesID main directory')
+    parser.add_argument('-i','--input', type=str, help='Path to the NGSpeciesID main directory')
     parser.add_argument('-p','--percent_system_use', type=str, help='Percent system use written as integer.')
     args = parser.parse_args()
-    main(args)
+    haplotype_phaser(args)
