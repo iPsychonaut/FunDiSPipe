@@ -69,7 +69,7 @@ python /path/to/fundis_summarize.py -i /path/to/input_dir -p 80
 
 - `-i`, `--input_fastq` or `--input_dir`: Path to the FASTQ file containing ONT nrITS data or path to the directory containing the data.
 - `-t`, `--primers_text_path`: Path to Text file containing the Primers used to generate input_fastq.
-- '-x', '--minbar_index_path', type=str, help='Path to Text file containing the minibar index to parse input_fastq.
+- `-x`, `--minbar_index_path`: Path to Text file containing the minibar index to parse input_fastq.
 - `-p`, `--percent_system_use`: Percent system use written as an integer.
 
 ## Author
