@@ -11,7 +11,6 @@ This can be used individually by calling the command:
     python /path/to/fundis_minibar_ngsid.py --input /path/to/input.fastq ---minbar_index_path /path/to/index.txt --primers_text_path /path/to/primers.txt --percent_system_use 50
 """
 
-import psutil
 import os
 import platform
 import sys
@@ -114,12 +113,8 @@ def minibar_ngsid(args):
         # Get the number of CPUs available on the system
         num_cpus = multiprocessing.cpu_count()
         
-        # Get the amount of RAM (GB) currently available
-        mem_info = psutil.virtual_memory()
-        
         # Calculate the number of threads as 80% of available CPUs & RAM
-        cpu_threads = int(math.floor(num_cpus * percent_system_use))
-        ram_gb = int(mem_info.total / (1024.0 ** 3) * percent_system_use)    
+        cpu_threads = int(math.floor(num_cpus * percent_system_use))  
             
         # TODO: Update minibar.py to be its own module
         path_to_minibar = f"{environment_dir}/Fundis/Programs-20230719T043926Z-001/Programs/minibar.py"
