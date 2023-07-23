@@ -11,7 +11,6 @@ This can be used individually by calling the command:
     python /path/to/fundis_main.py --input /path/to/input.fastq ---minbar_index_path /path/to/index.txt --primers_text_path /path/to/primers.txt --percent_system_use 50
 """
 
-import psutil
 import os
 import platform
 import sys
@@ -22,13 +21,7 @@ import math
 import glob
 import concurrent.futures
 import argparse
-from tqdm import tqdm
-import pandas as pd
 import queue
-import pysam
-from Bio import SeqIO
-from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord
 import shutil
 from fundis_minibar_ngsid import minibar_ngsid
 from fundis_haplotype_phaser import haplotype_phaser
@@ -131,36 +124,39 @@ def check_tools_installed(tools, environment_dir):
             print(output.decode())
         else:
             print(f"PASS: {tool} installed successfully\n")
-            
-def main(args):
-    # Global environment_dir
-    environment_dir = ""
-    environment_cmd_prefix = ""
-    environment_dir = check_os()
-    main_working_dir = os.getcwd()
 
+# Global environment_dir
+environment_dir = ""
+environment_cmd_prefix = ""
+environment_dir = check_os()
+main_working_dir = os.getcwd()
+
+# Check Pipeline Prerequisites
+libraries = ["tqdm", "pandas", "pysam", "biopython"]
+libraries_check(libraries)
+tools = ['NGSpeciesID', 'bwa', 'samtools', 'bcftools', 'whatshap', 'medaka', 'openblas', 'spoa']
+check_tools_installed(tools, environment_dir)
+
+from tqdm import tqdm
+import pandas as pd
+import pysam
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+
+def main(args):
     # Parse user arguments
     input_fastq = args.input if args.input else f"{environment_dir}/Fundis/TEST/combined2.fastq"
     path_to_minibar_index = args.minbar_index_path if args.minbar_index_path else "/mnt/e/Fundis/Programs-20230719T043926Z-001/Programs/Index.txt"
     primers_text_path = args.primers_text_path if args.primers_text_path else f"{environment_dir}/Fundis/Programs-20230719T043926Z-001/Programs/primers.txt"
     percent_system_use = float(args.percent_system_use)/100 if args.percent_system_use else 0.5
     minbar_dir = input_fastq.replace('.fastq','_minibar')
-    
-    # Check Pipeline Prerequisites
-    libraries = ["psutil", "tqdm", "pandas", "pysam", "biopython"]
-    libraries_check(libraries)
-    tools = ['NGSpeciesID', 'bwa', 'samtools', 'bcftools', 'whatshap', 'medaka', 'openblas', 'spoa']
-    check_tools_installed(tools, environment_dir)
 
     # Get the number of CPUs available on the system
     num_cpus = multiprocessing.cpu_count()
-    
-    # Get the amount of RAM (GB) currently available
-    mem_info = psutil.virtual_memory()
-    
+   
     # Calculate the number of threads as 80% of available CPUs & RAM
     cpu_threads = int(math.floor(num_cpus * percent_system_use))
-    ram_gb = int(mem_info.total / (1024.0 ** 3) * percent_system_use)    
     
     # Try to run the MiniBar & NGSpeciesID functions
     try:
