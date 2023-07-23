@@ -7,8 +7,8 @@ Created on Wed Jul 19 2023
 This is a module intended to be used as a part of a pipeline.
 
 This can be used individually by calling the command:
-    python /path/to/fundis_main.py -i /path/to/input.fastq -x /path/to/index.txt -t /path/to/primers.txt -p 80
-    python /path/to/fundis_main.py --input_fastq /path/to/input.fastq ---minbar_index_path /path/to/index.txt --primers_text_path /path/to/primers.txt --percent_system_use 80
+    python /path/to/fundis_main.py -i /path/to/input.fastq -x /path/to/index.txt -t /path/to/primers.txt -p 50
+    python /path/to/fundis_main.py --input /path/to/input.fastq ---minbar_index_path /path/to/index.txt --primers_text_path /path/to/primers.txt --percent_system_use 50
 """
 
 import psutil
@@ -22,7 +22,17 @@ import math
 import glob
 import concurrent.futures
 import argparse
-# from tqdm import tqdm
+from tqdm import tqdm
+import pandas as pd
+import queue
+import pysam
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+import shutil
+from fundis_minibar_ngsid import minibar_ngsid
+from fundis_haplotype_phaser import haplotype_phaser
+from fundis_summarize import summarize
 
 # Function to check that all Python Libraries are installed, and if not installs them
 def libraries_check(libraries):
@@ -123,11 +133,17 @@ def check_tools_installed(tools, environment_dir):
             print(f"PASS: {tool} installed successfully\n")
             
 def main(args):
+    # Global environment_dir
+    environment_dir = ""
+    environment_cmd_prefix = ""
+    environment_dir = check_os()
+    main_working_dir = os.getcwd()
+
     # Parse user arguments
-    input_fastq = args.input_fastq if args.input_fastq else f"{environment_dir}/Fundis/TEST/combined2.fastq"
+    input_fastq = args.input if args.input else f"{environment_dir}/Fundis/TEST/combined2.fastq"
     path_to_minibar_index = args.minbar_index_path if args.minbar_index_path else "/mnt/e/Fundis/Programs-20230719T043926Z-001/Programs/Index.txt"
     primers_text_path = args.primers_text_path if args.primers_text_path else f"{environment_dir}/Fundis/Programs-20230719T043926Z-001/Programs/primers.txt"
-    percent_system_use = float(args.percent_system_use)/100 if args.percent_system_use else 0.8
+    percent_system_use = float(args.percent_system_use)/100 if args.percent_system_use else 0.5
     minbar_dir = input_fastq.replace('.fastq','_minibar')
     
     # Check Pipeline Prerequisites
@@ -146,52 +162,29 @@ def main(args):
     cpu_threads = int(math.floor(num_cpus * percent_system_use))
     ram_gb = int(mem_info.total / (1024.0 ** 3) * percent_system_use)    
     
-    # python fundis_minibar_ngsid.py args.input_fastq, args.primers_text_path and args.percent_system_use
-    minibar_ngsid_cmd = f'python fundis_minibar_ngsid.py -i {input_fastq} -x {path_to_minibar_index} -t {primers_text_path} -p {percent_system_use}'
-    print(f"\nRunning Minibar/NGSID Command: {minibar_ngsid_cmd}")
-    minibar_ngsid_process = subprocess.Popen(minibar_ngsid_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    minibar_ngsid_output, minibar_ngsid_error = minibar_ngsid_process.communicate()
-    print(minibar_ngsid_output.decode())
-    if minibar_ngsid_process.returncode != 0:
-        print(f"ERROR: There was a problem: {minibar_ngsid_process.returncode}")
-    else:
-        print("PASS: Successfully parsed input FASTQ with minibar & NGSequenceID")
+    # Try to run the MiniBar & NGSpeciesID functions
+    try:
+        minibar_ngsid(args)
+    except Exception as e:
+        print(f"ERROR: There was a problem running minibar_ngsid: {str(e)}")
+
+    # Try to run the Haplotype Phaser function
+    try:
+        haplotype_phaser(args)
+    except Exception as e:
+        print(f"ERROR: There was a problem: {str(e)}")
     
-    # ptyhon fundis_haplotype_phaser.py PATH FOR HAPLOTYPE PARSER and args.percent_system_use
-    hyplotype_parser_cmd = f'python fundis_haplotype_phaser.py -i {minbar_dir} -p {percent_system_use}'
-    print(f"\nRunning Haplotype Phaser Command: {hyplotype_parser_cmd}")
-    hyplotype_parser_process = subprocess.Popen(hyplotype_parser_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    hyplotype_parser_output, hyplotype_parser_error = hyplotype_parser_process.communicate()
-    print(hyplotype_parser_output.decode())
-    if hyplotype_parser_process.returncode != 0:
-        print(f"ERROR: There was a problem: {hyplotype_parser_process.returncode}")
-    else:
-        print("PASS: Successfully phased hyplotypes for NGSequenceID folder")
-    
-    # python fundis_summarize.py PATH FOR HAPLOTYPE PARSER and args.percent_system_use
-    summarize_cmd = f'python fundis_summarize.py -i {minbar_dir} -p {percent_system_use}'
-    print(f"\nRunning Summarize Command: {summarize_cmd}")
-    summarize_process = subprocess.Popen(summarize_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    summarize_output, summarize_error = summarize_process.communicate()
-    print(summarize_output.decode())
-    if summarize_process.returncode != 0:
-        print(f"ERROR: There was a problem: {summarize_process.returncode}")
-    else:
-        print("PASS: Successfully summarized NGSequenceID folder for MycoMap")
-    
-    print("\n*****PASS: FunDiS Pipeline complete*****")
+    # Try to run the Summarize function
+    try:
+        summarize(args)
+    except Exception as e:
+        print(f"ERROR: There was a problem: {str(e)}")
     
 # If this script is the main entry point, parse the arguments and call the main function
 if __name__ == "__main__":
-    # Global environment_dir
-    environment_dir = ""
-    environment_cmd_prefix = ""
-    environment_dir = check_os()
-    main_working_dir = os.getcwd()
-
     # Parse user arguments
     parser = argparse.ArgumentParser(description="Process ONT FASTQ file with minibar.py.")
-    parser.add_argument('-i', '--input_fastq', type=str, help='Path to the FASTQ file containing ONT nrITS data')
+    parser.add_argument('-i', '--input', type=str, help='Path to the FASTQ file containing ONT nrITS data')
     parser.add_argument('-x', '--minbar_index_path', type=str, help='Path to Text file containing the minibar index to parse input_fastq.')
     parser.add_argument('-t', '--primers_text_path', type=str, help='Path to Text file containing the Primers used to generate input_fastq.')
     parser.add_argument('-p', '--percent_system_use', type=str, help='Percent system use written as integer.')
