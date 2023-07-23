@@ -57,7 +57,7 @@ def check_os():
 # Function to index a given fastq file with minibar.py provided by FunDiS:
 def index_fastq_with_minibar(input_fastq, path_to_minibar, path_to_minibar_index):
     print(f'\nIndexing {input_fastq} with minibar...')
-    minbar_dir = input_fastq.replace('.fastq','_minibar')
+    minbar_dir = input_fastq.replace('.fastq','_minibar_NGSID')
     if os.path.isdir(minbar_dir):
         print(f"PASS: Skipping minibar, {minbar_dir} already exists")
         return minbar_dir
@@ -77,7 +77,7 @@ def index_fastq_with_minibar(input_fastq, path_to_minibar, path_to_minibar_index
         return minbar_dir
 
 # Function to generate consensus 
-def consensus_align_with_ngspeciesid(input_fastq, primers_path):
+def consensus_align_with_ngspeciesid(input_fastq, primers_text_path):
     print(f'\nGenerating raw alignment and consensus reads for {input_fastq} with NGSpeciesID...')     
     output_folder = input_fastq.replace('.fastq','_NGSequenceID')
     # Check if the output file already exists
@@ -87,7 +87,7 @@ def consensus_align_with_ngspeciesid(input_fastq, primers_path):
     else:
         os.makedirs(output_folder, exist_ok=True)  # add exist_ok=True
     # If the file doesn't exist, run Pilon
-    cmd = f"NGSpeciesID --ont --consensus --sample_size 500 --m 730 --s 400 --medaka --primer_file {primers_path} --fastq {input_fastq} --outfolder {output_folder}"
+    cmd = f"NGSpeciesID --ont --consensus --sample_size 500 --m 730 --s 400 --medaka --primer_file {primers_text_path} --fastq {input_fastq} --outfolder {output_folder}"
     process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     output, error = process.communicate()
     print(output.decode())
@@ -100,8 +100,8 @@ def main(args):
     # Parse user arguments
     input_fastq = args.input_fastq if args.input_fastq else f"{environment_dir}/Fundis/TEST/combined2.fastq"
     path_to_minibar_index = args.minbar_index_path if args.minbar_index_path else "/mnt/e/Fundis/Programs-20230719T043926Z-001/Programs/Index.txt"
-    primers_path = args.primers_path if args.primers_path else f"{environment_dir}/Fundis/Programs-20230719T043926Z-001/Programs/primers.txt"
-    percent_system_use = float(args.percent_system_use/100) if args.percent_system_use else 0.8
+    primers_text_path = args.primers_text_path if args.primers_text_path else f"{environment_dir}/Fundis/Programs-20230719T043926Z-001/Programs/primers.txt"
+    percent_system_use = float(args.percent_system_use)/100 if args.percent_system_use else 0.8
     
     # Get the number of CPUs available on the system
     num_cpus = multiprocessing.cpu_count()
@@ -110,7 +110,7 @@ def main(args):
     mem_info = psutil.virtual_memory()
     
     # Calculate the number of threads as 80% of available CPUs & RAM
-    cpu_threads = int(math.floor(num_cpus * ))
+    cpu_threads = int(math.floor(num_cpus * percent_system_use))
     ram_gb = int(mem_info.total / (1024.0 ** 3) * percent_system_use)    
         
     # TODO: Update minibar.py to be its own module
@@ -123,7 +123,7 @@ def main(args):
     
     # Use a ThreadPoolExecutor to run the NGSpeciesID command in parallel for each .fastq file
     with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_threads) as executor:
-        futures = {executor.submit(consensus_align_with_ngspeciesid, fastq_file, primers_path) for fastq_file in fastq_files}
+        futures = {executor.submit(consensus_align_with_ngspeciesid, fastq_file, primers_text_path) for fastq_file in fastq_files}
         for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Processing", unit="task"):
             output_folder = future.result()
             if output_folder is not None:
