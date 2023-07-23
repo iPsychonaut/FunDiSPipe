@@ -7,8 +7,8 @@ Created on Wed Jul 19 2023
 This is a module intended to be used as a part of a pipeline.
 
 This can be used individually by calling the command:
-    python /path/to/fundis_minibar_ngsid.py -i /path/to/input.fastq -x /path/to/index.txt -t /path/to/primers.txt -p 80
-    python /path/to/fundis_minibar_ngsid.py --input_fastq /path/to/input.fastq ---minbar_index_path /path/to/index.txt --primers_text_path /path/to/primers.txt --percent_system_use 80
+    python /path/to/fundis_minibar_ngsid.py -i /path/to/input.fastq -x /path/to/index.txt -t /path/to/primers.txt -p 50
+    python /path/to/fundis_minibar_ngsid.py --input /path/to/input.fastq ---minbar_index_path /path/to/index.txt --primers_text_path /path/to/primers.txt --percent_system_use 50
 """
 
 import psutil
@@ -71,10 +71,10 @@ def index_fastq_with_minibar(input_fastq, path_to_minibar, path_to_minibar_index
     print(output.decode())
     if process.returncode != 0:
         print(f"ERROR: There was a problem running minibar. Return code: {process.returncode}")
-        return None
+        return False  # Return False in case of error
     else:
         print("PASS: Successfully indexed fastq with minibar")
-        return minbar_dir
+        return minbar_dir  # Return directory in case of success
 
 # Function to generate consensus 
 def consensus_align_with_ngspeciesid(input_fastq, primers_text_path):
@@ -93,57 +93,71 @@ def consensus_align_with_ngspeciesid(input_fastq, primers_text_path):
     print(output.decode())
     if process.returncode != 0:
         print(f"ERROR: There was a problem running NGSpeciesID. Return code: {process.returncode}")
+        return False  # Return False in case of error
     else:
         print("PASS: Successfully genreated NGSpeciesID output folder...")
+        return output_folder  # Return directory in case of success
 
-def main(args):   
-    # Parse user arguments
-    input_fastq = args.input_fastq if args.input_fastq else f"{environment_dir}/Fundis/TEST/combined2.fastq"
-    path_to_minibar_index = args.minbar_index_path if args.minbar_index_path else "/mnt/e/Fundis/Programs-20230719T043926Z-001/Programs/Index.txt"
-    primers_text_path = args.primers_text_path if args.primers_text_path else f"{environment_dir}/Fundis/Programs-20230719T043926Z-001/Programs/primers.txt"
-    percent_system_use = float(args.percent_system_use)/100 if args.percent_system_use else 0.8
-    
-    # Get the number of CPUs available on the system
-    num_cpus = multiprocessing.cpu_count()
-    
-    # Get the amount of RAM (GB) currently available
-    mem_info = psutil.virtual_memory()
-    
-    # Calculate the number of threads as 80% of available CPUs & RAM
-    cpu_threads = int(math.floor(num_cpus * percent_system_use))
-    ram_gb = int(mem_info.total / (1024.0 ** 3) * percent_system_use)    
+def minibar_ngsid(args):   
+    try:
+        # Global environment_dir
+        environment_dir = ""
+        environment_cmd_prefix = ""
+        environment_dir = check_os()
+        main_working_dir = os.getcwd()
         
-    # TODO: Update minibar.py to be its own module
-    path_to_minibar = f"{environment_dir}/Fundis/Programs-20230719T043926Z-001/Programs/minibar.py"
-    minbar_dir = index_fastq_with_minibar(input_fastq, path_to_minibar, path_to_minibar_index)
-    os.chdir(main_working_dir)
-   
-    # Get a list of all .fastq files in the directory
-    fastq_files = glob.glob(os.path.join(minbar_dir, "*.fastq"))
+        # Parse user arguments
+        input_fastq = args.input if args.input else f"{environment_dir}/Fundis/TEST/combined2.fastq"
+        path_to_minibar_index = args.minbar_index_path if args.minbar_index_path else "/mnt/e/Fundis/Programs-20230719T043926Z-001/Programs/Index.txt"
+        primers_text_path = args.primers_text_path if args.primers_text_path else f"{environment_dir}/Fundis/Programs-20230719T043926Z-001/Programs/primers.txt"
+        percent_system_use = float(args.percent_system_use)/100 if args.percent_system_use else 0.5
+        
+        # Get the number of CPUs available on the system
+        num_cpus = multiprocessing.cpu_count()
+        
+        # Get the amount of RAM (GB) currently available
+        mem_info = psutil.virtual_memory()
+        
+        # Calculate the number of threads as 80% of available CPUs & RAM
+        cpu_threads = int(math.floor(num_cpus * percent_system_use))
+        ram_gb = int(mem_info.total / (1024.0 ** 3) * percent_system_use)    
+            
+        # TODO: Update minibar.py to be its own module
+        path_to_minibar = f"{environment_dir}/Fundis/Programs-20230719T043926Z-001/Programs/minibar.py"
+        minbar_dir = index_fastq_with_minibar(input_fastq, path_to_minibar, path_to_minibar_index)
+        if minbar_dir == False:  # Check if minibar indexing failed
+            print("ERROR: Failed to index fastq with minibar")
+            return False
+        os.chdir(main_working_dir)
+       
+        # Get a list of all .fastq files in the directory
+        fastq_files = glob.glob(os.path.join(minbar_dir, "*.fastq"))
+        
+        # Use a ThreadPoolExecutor to run the NGSpeciesID command in parallel for each .fastq file
+        with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_threads) as executor:
+            futures = {executor.submit(consensus_align_with_ngspeciesid, fastq_file, primers_text_path) for fastq_file in fastq_files}
+            for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Processing", unit="task"):
+                output_folder = future.result()
+                if output_folder == False:  # Check if NGSpeciesID alignment failed
+                    print("ERROR: Failed to align with NGSpeciesID")
+                    return False
+                elif output_folder is not None:
+                    print(f"Finished processing: {output_folder}")
     
-    # Use a ThreadPoolExecutor to run the NGSpeciesID command in parallel for each .fastq file
-    with concurrent.futures.ThreadPoolExecutor(max_workers=cpu_threads) as executor:
-        futures = {executor.submit(consensus_align_with_ngspeciesid, fastq_file, primers_text_path) for fastq_file in fastq_files}
-        for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Processing", unit="task"):
-            output_folder = future.result()
-            if output_folder is not None:
-                print(f"Finished processing: {output_folder}")
+        print("PASS: FunDiS Minibar.py & NGSequenceID complete\n")
+        return True
 
-    print("PASS: FunDiS Minibar.py & NGSequenceID complete\n")
+    except Exception as e:
+        print(f"ERROR: There was a problem in minibar_ngsid: {str(e)}")
+        return False
                 
 # If this script is the main entry point, parse the arguments and call the main function
 if __name__ == "__main__":
-    # Global environment_dir
-    environment_dir = ""
-    environment_cmd_prefix = ""
-    environment_dir = check_os()
-    main_working_dir = os.getcwd()
-    
     # Parse user arguments
     parser = argparse.ArgumentParser(description="Process ONT FASTQ file with minibar.py.")
-    parser.add_argument('-i', '--input_fastq', type=str, help='Path to the FASTQ file containing ONT nrITS data')
+    parser.add_argument('-i', '--input', type=str, help='Path to the FASTQ file containing ONT nrITS data')
     parser.add_argument('-x', '--minbar_index_path', type=str, help='Path to Text file containing the minibar index to parse input_fastq.')
     parser.add_argument('-t', '--primers_text_path', type=str, help='Path to Text file containing the Primers used to generate input_fastq.')
     parser.add_argument('-p', '--percent_system_use', type=str, help='Percent system use written as integer.')
     args = parser.parse_args()
-    main(args)
+    minibar_ngsid(args)
