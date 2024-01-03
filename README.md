@@ -79,8 +79,9 @@ Start by navigating the GUI to select your input files. Here’s a brief guide o
 - **GUI**: Launch the GUI script to access the pipeline's functionalities. The interface is intuitive and guides you through the process.
 - **Mini-Barcoder**: After selecting your `.fastq.gz` file, this module will prepare it for the NGSpeciesID analysis.
 - **NGSpeciesID**: Once the data is prepped, use this module for species identification. The output will include detailed species information.
-- **Haplotype Phaser**: To delve deeper into the genetic analysis, use this module for haplotype phasing.
+   - **Haplotype Phaser**: An advanced setting that will perform a dual analysis and preserve haplotypes with IUPAC ambiguities and lower-case letters for insertions/deletions.
 - **MycoMap Summarizer**: Finally, to aggregate and summarize your results, use this module. It consolidates the data into an easy-to-interpret format.
+   - FEATURE PENDING **Haplotype Phaser**: An advanced setting that will use the Phased Haplotype file instead of the traditionally used medaka consensus file.
 
 For detailed instructions and options for each module, refer to the comments and documentation within each script file. These instructions provide guidance on executing the scripts and customizing the analysis to your requirements.
 
