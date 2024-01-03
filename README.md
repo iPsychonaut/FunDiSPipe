@@ -59,7 +59,7 @@ chmod +x ./fundis_setup.sh &&
    - Enhances species identification accuracy.
    - Critical for detailed genetic analysis and research.
 
-5. **MycoMap Summarizer (MycoMap_Summarize.py)** ():
+5. **MycoMap Summarizer (MycoMap_Summarize.py)** (https://www.protocols.io/view/primary-data-analysis-basecalling-demultiplexing-a-dm6gpbm88lzp/v3?step=3):
    - Aggregates results from the entire pipeline.
    - Produces comprehensive summary reports for analysis and interpretation.
    - Simplifies data review and sharing.
