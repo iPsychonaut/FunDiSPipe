@@ -1,77 +1,97 @@
+# FunDiSPipe: Fungal Diversity Survey Pipeline
 
-# FunDiS Pipeline
-
-FunDiS Pipeline is a suite of scripts intended to streamline the processing of Next-Generation Sequencing (NGS) data. The scripts can be run individually or as a whole to form a complete pipeline.
+FunDiSPipe is a comprehensive bioinformatics pipeline designed for the Fungal Diversity Survey (FunDiS), specifically tailored for analyzing fungal ITS data from Oxford Nanopore Technologies sequencing. This pipeline streamlines the process from sequencing data to species identification and summarization. This is the main Graphical User Interface for a modified protocol devloped by Stephen Douglas Russell (https://www.protocols.io/view/primary-data-analysis-basecalling-demultiplexing-a-dm6gpbm88lzp/v3?step=3); this pipeline was paid for by the Fungal Diversity Survey (FunDiS).
 
 ## Prerequisites
 
 This application is designed to be run on a Linux/WSL environment and requires the following Python libraries:
 
-- psutil
-- tqdm
-- pandas
-- pysam
-- biopython
-- multiprocessing
-- math
-- queue
-- glob
-- shutil
+- openblas==0.3.3
+- biopython==1.81
+- samtools==1.18
+- minimap2==2.26
+- bcftools==1.17
+- bwa==0.7.17
+- whatshap==2.1
+- spoa==4.1.3
+- racon==1.5.0
+- pyvcf==0.6.8
+- termcolor=2.3.0
+- gdown==4.7.1
 
 The application also relies on the following tools:
 
-- NGSpeciesID
-- bwa
-- samtools
-- bcftools
-- whatshap
-- medaka
-- openblas
-- spoa
+- NGSpeciesID (https://github.com/ksahlin/NGSpeciesID)
+- medaka (https://github.com/nanoporetech/medaka)
 
-Note: The application checks for the required Python libraries and tools during execution and attempts to install any missing dependencies.
+Note: The application checks for the required Python libraries and tools by running fundis_setup.sh and attempts to install any missing dependencies.
 
-## Running the Pipeline
+## Installation
 
-Each module of the pipeline can be run individually or as a whole.
+To install FunDiSPipe, follow these steps after cloning the GitHub repository:
 
-### Running the Whole Pipeline
-
-To run the whole pipeline, use the `fundis_main.py` script. For example:
-
-```
-python /path/to/fundis_main.py -i /path/to/input.fastq -x /path/to/index.txt -t /path/to/primers.txt -p 80
+```bash
+sudo apt-get install dos2unix &&
+dos2unix ./fundis_setup.sh &&
+chmod +x ./fundis_setup.sh &&
+./fundis_setup.sh
 ```
 
-### Running Individual Modules
+## Modules and Their Functionalities
 
-Each module can also be run individually. Here's what each module does:
+1. **GUI (FunDiS_GUI.py)**:
+   - Acts as the central interface for the pipeline.
+   - Facilitates file selection, process initiation, and result visualization.
+   - Integrates other modules for a seamless workflow.
 
-- **fundis_minibar_ngsid.py**: This script processes the input FASTQ file with MiniBar and NGSpeciesID. MiniBar is a tool for demultiplexing barcoded read data and NGSpeciesID is a tool used for the identification of specimens in NGS datasets. The script starts by checking the operating system, installing missing libraries, and setting up the working environment. It then moves on to demultiplexing and identifying species from the input FASTQ data. The results are output in a directory specified by the user.
+2. **Mini-Barcoder (FunDiS_Minibar.py)** (https://github.com/calacademy-research/minibar): 
+   - Prepares `.fastq.gz` files for species identification.
+   - Extracts and processes sequences from raw data.
+   - Essential for initial data preparation and quality control.
 
-```
-python /path/to/fundis_minibar_ngsid.py -i /path/to/input.fastq -x /path/to/index.txt -t /path/to/primers.txt -p 80
-```
+3. **NGSpeciesID (FunDiS_NGSpeciesID.py)**:
+   - Identifies species from processed sequencing data.
+   - Utilizes advanced algorithms for accurate species matching.
+   - Outputs detailed reports on identified species and their characteristics.
 
-- **fundis_haplotype_phaser.py**: This script takes the output from the `fundis_minibar_ngsid.py` script and phases the haplotypes for each sample. Phasing is the process of determining the specific set of variants found on each physical copy of a particular gene or genomic region. The phased haplotypes are output in the NGSpeciesID output directory.
+4. **Haplotype Phaser (FunDiS_hap_phase.py)**:
+   - Resolves haplotype variations in sequencing data.
+   - Enhances species identification accuracy.
+   - Critical for detailed genetic analysis and research.
 
-```
-python /path/to/fundis_haplotype_phaser.py -i /path/to/input_dir -p 80
-```
+5. **MycoMap Summarizer (MycoMap_Summarize.py)** ():
+   - Aggregates results from the entire pipeline.
+   - Produces comprehensive summary reports for analysis and interpretation.
+   - Simplifies data review and sharing.
 
-- **fundis_summarize.py**: This script summarizes the output from the `fundis_haplotype_phaser.py` script. It provides a summary of the results, including counts of unique samples, total consensus sequences, and total reads in consensus sequences. It also copies and updates the names of all FASTQ and consensus FASTA files. The results are output in a summary directory named after the source directory.
+## Inputs and Outputs
 
-```
-python /path/to/fundis_summarize.py -i /path/to/input_dir -p 80
-```
+- **Input**: `.fastq.gz` file containing Oxford Nanopore Guppy Basecalled sequences.
+- **Outputs**:
+  - Processed and quality-checked sequence data.
+  - Species identification reports and detailed analysis.
+  - Summarized outputs and aggregated data for further study.
 
-## Arguments
+## Usage
 
-- `-i`, `--input_fastq` or `--input_dir`: Path to the FASTQ file containing ONT nrITS data or path to the directory containing the data.
-- `-t`, `--primers_text_path`: Path to Text file containing the Primers used to generate input_fastq.
-- `-x`, `--minbar_index_path`: Path to Text file containing the minibar index to parse input_fastq.
-- `-p`, `--percent_system_use`: Percent system use written as an integer.
+Start by navigating the GUI to select your input files. Here’s a brief guide on using each module:
+
+- **GUI**: Launch the GUI script to access the pipeline's functionalities. The interface is intuitive and guides you through the process.
+- **Mini-Barcoder**: After selecting your `.fastq.gz` file, this module will prepare it for the NGSpeciesID analysis.
+- **NGSpeciesID**: Once the data is prepped, use this module for species identification. The output will include detailed species information.
+- **Haplotype Phaser**: To delve deeper into the genetic analysis, use this module for haplotype phasing.
+- **MycoMap Summarizer**: Finally, to aggregate and summarize your results, use this module. It consolidates the data into an easy-to-interpret format.
+
+For detailed instructions and options for each module, refer to the comments and documentation within each script file. These instructions provide guidance on executing the scripts and customizing the analysis to your requirements.
+
+## Contributing
+
+Contributions are welcome. Please follow standard coding practices and clearly document any changes or enhancements.
+
+## License
+
+Please see the LICENSE file in the GitHub repository for detailed licensing information.
 
 ## Author
 
-Ian Michael Bollinger (ian.michael.bollinger@gmail.com/researchconsultants@critical.consulting)
+ian.michael.bollinger@gmail.com/researchconsultants@critical.consulting
