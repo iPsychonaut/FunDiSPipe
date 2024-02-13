@@ -5,7 +5,13 @@ FunDiSPipe is a comprehensive bioinformatics pipeline designed for the Fungal Di
 ## Prerequisites
 
 This application is designed to be run on a Linux/WSL environment and requires the following Python libraries:
-
+- numpy==1.26.3
+- pandas==2.2.0
+- matplotlib==3.8.2
+- seaborn==0.13.1
+- pyyaml==6.0.1
+- statsmodels==0.14.1
+- pandas==2.0.3
 - openblas==0.3.3
 - biopython==1.81
 - samtools==1.18
@@ -15,26 +21,34 @@ This application is designed to be run on a Linux/WSL environment and requires t
 - whatshap==2.1
 - spoa==4.1.3
 - racon==1.5.0
+- psutil==5.9.8
+- blast==2.15.0
 - pyvcf==0.6.8
-- termcolor=2.3.0
-- gdown==4.7.1
+- fastqc==0.12.1
 
 The application also relies on the following tools:
-
 - NGSpeciesID (https://github.com/ksahlin/NGSpeciesID)
 - medaka (https://github.com/nanoporetech/medaka)
 
-Note: The application checks for the required Python libraries and tools by running fundis_setup.sh and attempts to install any missing dependencies.
+Note: Running fundis_setup.sh attempts to provide the setup to install all python libraries and dependencies.
 
 ## Installation
 
 To install FunDiSPipe, follow these steps after cloning the GitHub repository:
-
 ```bash
-sudo apt-get install dos2unix &&
-dos2unix ./fundis_setup.sh &&
-chmod +x ./fundis_setup.sh &&
-./fundis_setup.sh
+bash ./fundis_setup.sh
+```
+
+Close this terminal; open a new one and run the following commands:
+```bash
+# base installs
+echo -e "\e[36m'mamba install -y -c bioconda -c conda-forge -c agbiome -c prkrekel numpy==1.26.3 pandas==2.2.0 matplotlib==3.8.2 seaborn==0.13.1 pyyaml==6.0.1 statsmodels==0.14.1\e[0m"
+
+# fundis_env installs
+echo -e "\e[36m'conda activate fundis_env && mamba install -y -c bioconda -c conda-forge -c agbiome -c prkrekel pandas==2.0.3 openblas==0.3.3 biopython==1.81 samtools==1.18 minimap2==2.26 bcftools==1.17 bwa==0.7.17 whatshap==2.1 spoa==4.1.3 racon==1.5.0 psutil==5.9.8 blast==2.15.0 pyvcf==0.6.8 fastqc==0.12.1 && pip install NGSpeciesID && conda deactivate'\e[0m"
+
+# medaka env installs
+echo -e "\e[36m'conda activate medaka && mamba install -y -c bioconda -c conda-forge -c agbiome -c prkrekel medaka==1.11.1 && conda deactivate'\e[0m"
 ```
 
 ## Modules and Their Functionalities
@@ -49,7 +63,7 @@ chmod +x ./fundis_setup.sh &&
    - Extracts and processes sequences from raw data.
    - Essential for initial data preparation and quality control.
 
-3. **NGSpeciesID (FunDiS_NGSpeciesID.py)**:
+3. **NGSpeciesID (FunDiS_NGSpeciesID.py)** (https://github.com/ksahlin/NGSpeciesID):
    - Identifies species from processed sequencing data.
    - Utilizes advanced algorithms for accurate species matching.
    - Outputs detailed reports on identified species and their characteristics.
