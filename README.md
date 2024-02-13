@@ -92,7 +92,13 @@ conda activate medaka && mamba install -y -c bioconda -c conda-forge -c agbiome 
 
 ## Usage
 
-Start by navigating the GUI to select your input files. Here’s a brief guide on using each module:
+Navigate to the folder where FunDiS_GUI.py is located and execute the following command:
+
+```bash
+conda activate fundis_env && python FunDiS_GUI.py
+```
+
+Then navigate the GUI to select your input files. Here’s a brief guide on using each module:
 
 - **GUI**: Launch the GUI script to access the pipeline's functionalities. The interface is intuitive and guides you through the process.
 - **Mini-Barcoder**: After selecting your `.fastq.gz` file, this module will prepare it for the NGSpeciesID analysis.
