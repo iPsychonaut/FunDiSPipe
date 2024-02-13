@@ -43,10 +43,14 @@ Close this terminal; open a new one and run the following commands:
 ```bash
 # base installs
 mamba install -y -c bioconda -c conda-forge -c agbiome -c prkrekel numpy==1.26.3 pandas==2.2.0 matplotlib==3.8.2 seaborn==0.13.1 pyyaml==6.0.1 statsmodels==0.14.1
+```
 
+```bash
 # fundis_env installs
 conda activate fundis_env && mamba install -y -c bioconda -c conda-forge -c agbiome -c prkrekel pandas==2.0.3 openblas==0.3.3 biopython==1.81 samtools==1.18 minimap2==2.26 bcftools==1.17 bwa==0.7.17 whatshap==2.1 spoa==4.1.3 racon==1.5.0 psutil==5.9.8 blast==2.15.0 pyvcf==0.6.8 fastqc==0.12.1 && pip install NGSpeciesID && conda deactivate
+```
 
+```bash
 # medaka env installs
 conda activate medaka && mamba install -y -c bioconda -c conda-forge -c agbiome -c prkrekel medaka==1.11.1 && conda deactivate
 ```
