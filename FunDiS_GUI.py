@@ -22,11 +22,9 @@ Current Assumptions:
 """
 
 # Base Python Imports
-import pathlib, os, platform, multiprocessing, math
+import os, multiprocessing, math
 
 # Required Python Imports
-from termcolor import cprint
-from datetime import datetime
 import tkinter as tk
 from tkinter import filedialog, PhotoImage, messagebox
 
@@ -34,161 +32,18 @@ from tkinter import filedialog, PhotoImage, messagebox
 from MycoMap_Summarize import run_summary_prep
 from FunDiS_NGSpeciesID import run_ngsid_prep
 from FunDiS_Minbar import run_minibar_prep
+from FunDiS_Tools import log_print, generate_log_file, initialize_logging_environment, run_subprocess_cmd, get_resource_values
 
 # Global output_area variable
-PERCENT_RESOURCES = 0.2
+CPU_THREADS = 1
+PERCENT_RESOURCES = 0.75
 DEFAULT_LOG_FILE = None
-
-# Function to Generate a Log File
-def generate_log_file(log_file_path, use_numerical_suffix=False):
-    """
-    Generates or clears a log file based on the given parameters.
-    
-    This function either creates a new log file or clears an existing one, depending on the specified parameters. 
-    If the 'use_numerical_suffix' parameter is True, and the file already exists, a new file with a numerical suffix 
-    will be created. Otherwise, the existing file will be cleared.
-    
-    Parameters:
-        log_file_path (str): Path to the log file.
-        use_numerical_suffix (bool): If True, creates new files with numerical suffixes if the file exists; otherwise, clears the existing file.
-    
-    Returns:
-        str: Path to the log file.
-    
-    Notes:
-    - Useful for managing log file versions without overwriting existing logs.
-    - The numerical suffix increments for each new file created in the same location.
-    - When 'use_numerical_suffix' is False, it refreshes the log file by clearing existing content.
-    """
-    if os.path.exists(log_file_path) and use_numerical_suffix:
-        # If using numerical suffixes, increment until a new filename is found
-        counter = 1
-        new_log_file_path = f"{log_file_path.rsplit('.', 1)[0]}_{counter}.txt"
-        while os.path.exists(new_log_file_path):
-            counter += 1
-            new_log_file_path = f"{log_file_path.rsplit('.', 1)[0]}_{counter}.txt"
-        log_file_path = new_log_file_path
-    else:
-        # Clear the existing log file or create a new one
-        open(log_file_path, 'w').close()
-    
-    return log_file_path
-
-# Function to color coded print to console and save to log_file information
-def log_print(input_message, log_file=None):
-    """
-    Logs a message to a file and prints it to the console with appropriate coloring.
-    
-    This function takes a message and logs it to the specified file. Additionally, the message is printed to the 
-    console, potentially with specific coloring depending on the context.
-    
-    Parameters:
-        input_message (str): Message to be logged and printed.
-        log_file (str): Path to the log file.
-
-    Notes:
-        - The function uses a global default log file if none is specified.
-        - Timestamps each log entry for easy tracking.
-        - Utilizes color coding in the console to distinguish between different types of messages (e.g., errors, warnings).
-        - Supports color coding for specific message types: NOTE, CMD, ERROR, WARN, and PASS.
-        - Falls back to default (white) color if the message type is unrecognized.
-    """
-    # Access the global variable
-    global DEFAULT_LOG_FILE
-    
-    # Use the default log file if none specified
-    if log_file is None:
-        log_file = DEFAULT_LOG_FILE  
-    
-    # Establish current date-time
-    now = datetime.now()
-    message = f'[{now:%Y-%m-%d %H:%M:%S}]\t{input_message}'
-
-    # Determine the print color based on the input_message content
-    message_type_dict = {'NOTE': ['blue'],
-                         'CMD': ['cyan'],
-                         'ERROR': ['red'],
-                         'WARN': ['yellow'],
-                         'PASS': ['green'],}
-    print_color = ['white']  # Default color
-    for key, value in message_type_dict.items():
-        if key.lower() in input_message.lower():
-            print_color = value
-            break
-
-    try:
-        # Writing the message to the log file
-        with open(log_file, 'a') as file:
-            print(message, file=file)
-    except TypeError:
-        print(f"UNLOGGED ERROR:\tUnable to load the log file provided: {log_file}")
-
-    # Handling different message types for colored printing
-    try:
-        cprint(message, print_color[0])
-    except (KeyError, IndexError):
-        cprint(message, print_color[1] if len(print_color) > 1 else 'white')
-
-# Function to initialize the logging environment
-def initialize_logging_environment(input_file_path):
-    """
-    Initializes the logging environment based on the given input file path.
-
-    This function sets up the logging environment by adjusting file paths according to the operating system in use, 
-    ensuring file existence, and then generating a log file. It sets the global DEFAULT_LOG_FILE variable to the path 
-    of the generated log file.
-
-    Parameters:
-        input_file_path (str): Path to the input file which influences the log file generation.
-
-    Global Variables:
-        DEFAULT_LOG_FILE (str): The default path for the log file used throughout the logging process.
-
-    Notes:
-        - Supports Windows, Linux/WSL, and Darwin (macOS) environments.
-        - Prints unlogged messages to the console regarding environment detection and file existence.
-        - Modifies the global DEFAULT_LOG_FILE variable.
-    """
-    global DEFAULT_LOG_FILE
-    
-    # Determine the operating system
-    os_name = platform.system()
-    
-    # Depending on the operating system, handle the input file path differently
-    if os_name == "Windows":
-        # On Windows, ensure the file exists
-        if not os.path.exists(input_file_path):
-            print(f'UNLOGGED ERROR:\tThe specified file does not exist: {input_file_path}')
-            return
-        print('UNLOGGED:\tWINDOWS ENVIRONMENT')
-    elif os_name in ["Linux", "Darwin"]:  # Darwin is the system name for macOS
-        # For Linux/WSL/Mac, convert the Windows drive letter to the appropriate mount path
-        drive, path_without_drive = os.path.splitdrive(input_file_path)
-        if drive:
-            # Replace the drive letter with the WSL-style path (e.g., '/mnt/c')
-            drive_letter = drive.strip(":\\/")
-            path_without_drive_mod = path_without_drive.replace("\\", "/")
-            input_file_path = f'/mnt/{drive_letter.lower()}{path_without_drive_mod}'
-        else:
-            # If there's no drive letter, it's already a POSIX-style path
-            pass
-        print('UNLOGGED:\tLINUX/WSL/MAC ENVIRONMENT')
-    else:
-        print(f'UNLOGGED ERROR:\tUnsupported OS: {os_name}')
-        return
-
-    # Check if the file exists on the adjusted path
-    if not os.path.exists(input_file_path):
-        print(f'UNLOGGED ERROR:\tThe provided log file does not exist: {input_file_path}')
-        return
-    
-    # Generate the log file based on the input file
-    file_extension = pathlib.Path(input_file_path).suffix
-    run_log = input_file_path.replace(f".fastq{file_extension}", '.tsv')
-    run_log = generate_log_file(run_log, use_numerical_suffix=False)
-    
-    # Set the default log file to the generated run_log
-    DEFAULT_LOG_FILE = run_log
+ENVIRONMENT_TYPE = None
+SAMPLE_SIZE = "500"
+MIN_LENGTH_BP = "730"
+MAX_STD_DEV_BP = "400"
+HAP_PHASE_BOOL = True
+LOGGING_ON = False
 
 # GUI function to trigger minibar preparation
 def gui_minibar_prep():
@@ -205,17 +60,28 @@ def gui_minibar_prep():
     Notes:
         - Requires certain GUI elements like file_path_entry to be defined and accessible.
     """
-    ngsid_fastq_gz_path = file_path_entry.get()
-    if input_check(ngsid_fastq_gz_path) == False:
+    minibar_fastq_gz_path= minibar_file_path_entry.get()
+
+    # Populate this dictionary with entries from the main menu
+    chopper_command_dict = {"-q": str(minibar_percent_match_entry.get()),
+                            "--maxlength": str(minibar_barcode_edit_dist_entry.get()),
+                            "--minlength": str(minibar_primer_edit_dist_entry.get())}
+
+    # Populate this dictionary with entries from the main menu
+    minibar_command_dict = {"-p": str(minibar_percent_match_entry.get()),
+                            "-e": str(minibar_barcode_edit_dist_entry.get()),
+                            "-E": str(minibar_primer_edit_dist_entry.get()),
+                            "-l": str(minibar_search_length_entry.get())}
+
+    if input_check(minibar_fastq_gz_path) == False:
         pass
     else:
         log_print( "MiniBar preparation started...\n")
-    
-        ngsid_output_dir = ngsid_fastq_gz_path.replace(".fastq.gz","")
+        ngsid_output_dir = minibar_fastq_gz_path.replace(".fastq.gz","")
         minibar_path = "/mnt/d/FunDiS/minibar.py"
-        minibar_index_path = f"{os.path.dirname(ngsid_fastq_gz_path)}/Index.txt"
+        minibar_index_path = f"{os.path.dirname(minibar_fastq_gz_path)}/Index.txt"
         
-        run_minibar_prep(minibar_path, minibar_index_path, ngsid_fastq_gz_path, ngsid_output_dir)
+        run_minibar_prep(minibar_path, minibar_index_path, minibar_fastq_gz_path, ngsid_output_dir, chopper_command_dict, minibar_command_dict)
 
 # GUI function to trigger NGSpeciesID preparation
 def gui_ngsid_prep():
@@ -228,31 +94,30 @@ def gui_ngsid_prep():
 
     Global Variables:
         output_area (str): A global variable used for logging output messages.
-        cpu_threads (int): Number of CPU threads to be used in processing.
 
     Notes:
         - Retrieves parameters such as sample size, minimum length, and maximum standard deviation from GUI elements.
         - Requires certain GUI elements like sample_size_entry, min_length_bp_entry, etc., to be defined and accessible.
     """
-    global cpu_threads
-    ngsid_fastq_gz_path = file_path_entry.get()
-    if input_check(ngsid_fastq_gz_path) == False:
+    ngsid_folder_path = ngsid_folder_path_entry.get()
+    if input_check(ngsid_folder_path) == False:
         pass
     else:
         log_print( "NGSpeciesID preparation started...\n")
-    
+        
         sample_size = sample_size_entry.get()
         min_length_bp = min_length_bp_entry.get()
         max_std_dev_bp = max_std_dev_bp_entry.get()
         hap_phase_bool = hap_phase_var.get()
-        input_fastq_file = ngsid_fastq_gz_path.replace(".gz", "")
-        ngsid_output_dir = ngsid_fastq_gz_path.replace(".fastq.gz", "")
-        ngsid_primers_path = f"{os.path.dirname(ngsid_fastq_gz_path)}/primers.txt"
         
-        run_ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir)
+        input_fastq_file = minibar_file_path_entry.get().replace(".gz", "")
+        ngsid_output_dir = ngsid_folder_path.replace(".fastq.gz", "")
+        ngsid_primers_path = f"{os.path.dirname(ngsid_folder_path)}/primers.txt"
+        
+        run_ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, CPU_THREADS)
 
 # GUI function to trigger NGSpeciesID preparation  
-def gui_summary_prep(ngsid_fastq_gz_path):
+def gui_summary_prep():
     """
     GUI function to trigger summary preparation.
 
@@ -265,33 +130,67 @@ def gui_summary_prep(ngsid_fastq_gz_path):
     Notes:
         - Initiates the summary preparation in a separate thread to avoid blocking the GUI.
     """
-    if input_check(ngsid_fastq_gz_path) == False:
+    summary_folder_path = summary_folder_path_entry.get()
+    if input_check(summary_folder_path) == False:
         pass
     else:
         log_print( "MycoMap Summarize preparation started...\n")
         
         hap_phase_bool = hap_phase_var.get()
-        ngsid_output_dir = ngsid_fastq_gz_path.replace(".fastq.gz", "")
-    
-        run_summary_prep(ngsid_output_dir, hap_phase_bool)
+        summary_output_dir = minibar_file_path_entry.get().replace(".fastq.gz", "")
+        
+        run_summary_prep(summary_output_dir, hap_phase_bool)
 
-def choose_file():
+def choose_file_or_folder(file_path_entry):
     """
-    Opens a file dialog for selecting a file and initializes the logging environment.
+    Opens a dialog for selecting either a file or a folder and initializes the logging environment.
 
-    This function triggers a GUI file dialog to allow the user to select a file. Once a file is selected, it updates 
-    a GUI element with the file path and calls `initialize_logging_environment` to set up the logging based on the 
-    chosen file.
+    This function first asks the user if they want to select a file or a folder. Based on the user's choice, it 
+    triggers a GUI file dialog or a folder dialog to allow the user to make a selection. Once a selection is made, 
+    it updates a GUI element with the file or folder path and calls `initialize_logging_environment` to set up the 
+    logging based on the chosen file or folder.
 
     Notes:
-        - Assumes the existence of specific GUI elements like file_path_entry for updating the file path.
-        - Directly interacts with the user interface to facilitate file selection.
+        - Assumes the existence of specific GUI elements like file_path_entry for updating the file or folder path.
+        - Directly interacts with the user interface to facilitate file or folder selection.
     """
-    filename = filedialog.askopenfilename(initialdir="/", title="Select .fastq.gz file", filetypes=(("gzip files", "*.gz"),("all files", "*.*")))
+    # Ask the user if they want to select a file or a folder
+    choice = messagebox.askquestion("Choose File or Folder", "Do you want to select a file?")
+    if choice == 'yes':
+        selection = filedialog.askopenfilename(initialdir="/", title="Select file", filetypes=(("gzip files", "*.gz"), ("all files", "*.*")))
+    else:
+        selection = filedialog.askdirectory(initialdir="/", title="Select folder")
+    
+    # Update the file_path_entry with the selected file or folder path
     file_path_entry.delete(0, tk.END)
-    file_path_entry.insert(0, filename)
-    # Initialize the logging environment with the path to the input file
-    initialize_logging_environment(filename)
+    file_path_entry.insert(0, selection)
+    
+    if LOGGING_ON == False:
+        # Initialize the logging environment with the path to the input file
+        initialize_logging_environment(selection)
+        LOGGING_ON == True
+
+def choose_minibar_file():
+    """
+    Opens a file dialog for selecting a .fastq.gz file for minibar and updates related fields.
+    """
+    filename = filedialog.askopenfilename(initialdir="/", title="Select .fastq.gz file", filetypes=(("gzip files", "*.gz"), ("all files", "*.*")))
+    minibar_file_path_entry.delete(0, tk.END)
+    minibar_file_path_entry.insert(0, filename)
+    
+    # Assuming filename is a path to a .fastq.gz file, prepare the base directory for other uses
+    base_output_dir = filename.replace(".gz", "").replace(".fastq","")
+    
+    # Update ngsid_folder_path_entry and summary_folder_path_entry
+    ngsid_folder_path_entry.delete(0, tk.END)
+    ngsid_folder_path_entry.insert(0, base_output_dir)
+    
+    summary_folder_path_entry.delete(0, tk.END)
+    summary_folder_path_entry.insert(0, base_output_dir)
+
+    if LOGGING_ON == False:
+        initialize_logging_environment(filename)
+        LOGGING_ON == True
 
 def about():
     """
@@ -324,73 +223,18 @@ def exit_app():
     """
     root.destroy()
 
-def open_settings_window():
+def full_pipe():
     """
-    Opens a new window for adjusting advanced settings of the application.
     
-    This function creates a new top-level window containing various input fields and settings related to the application. 
-    It includes settings for CPU resource allocation, NGSpeciesID parameters, and options for haplotype phasing.
-    
-    Notes:
-        - The settings window includes fields for percent CPU resources, sample size, minimum sequence length, 
-          maximum standard deviation, and an option for haplotype phasing.
-        - Each setting field is initialized with a default value.
-        - The function declares several global variables that are used to store the settings.
-        - The settings window has a fixed size and does not allow resizing.
+
+    Returns
+    -------
+    None.
+
     """
-    settings_window = tk.Toplevel(root)
-    settings_window.title("Advanced Settings")
-
-    # Set the window icon
-    icon_image = PhotoImage(file="./fundis_icon.png")
-    settings_window.iconphoto(False, icon_image)
-
-    # Set initial window size and allow resizing
-    settings_window.geometry("250x250")  # Width x Height
-    settings_window.resizable(False, False)
-
-    # General FunDiS Pipeline Settings Label
-    tk.Label(settings_window, text="FunDiS Pipeline Settings").pack()
-    
-    # PERCENT_RESOURCES Entry
-    tk.Label(settings_window, text="Percent CPU Resources (0.00-1.00):").pack()
-    global PERCENT_RESOURCES  # Declare as global if you need to access outside the function
-    PERCENT_RESOURCES = tk.Entry(settings_window, width=50)
-    PERCENT_RESOURCES.pack()
-    PERCENT_RESOURCES.insert(0, "0.2")  # Default value for PERCENT_RESOURCES
-
-    # TODO: Minibar Settings Label
-    tk.Label(settings_window, text="Minibar Advanced Settings").pack()
-
-    # NGSpeciesID Settings Label
-    tk.Label(settings_window, text="NGSpeciesID Advanced Settings").pack()
-
-    # Sample Size Entry
-    tk.Label(settings_window, text="Sample Size (n):").pack()
-    global sample_size_entry  # Declare as global if you need to access outside the function
-    sample_size_entry = tk.Entry(settings_window, width=50)
-    sample_size_entry.pack()
-    sample_size_entry.insert(0, "500")  # Default value for Sample Size
-
-    # Minimum Length of Sequence Entry
-    tk.Label(settings_window, text="Minimum Length of Sequence (bp):").pack()
-    global min_length_bp_entry
-    min_length_bp_entry = tk.Entry(settings_window, width=50)
-    min_length_bp_entry.pack()
-    min_length_bp_entry.insert(0, "730")  # Default value for Minimum Length
-    
-    # Maximum Standard Deviation Entry
-    tk.Label(settings_window, text="Maximum Standard Deviation (bp):").pack()
-    global max_std_dev_bp_entry
-    max_std_dev_bp_entry = tk.Entry(settings_window, width=50)
-    max_std_dev_bp_entry.pack()
-    max_std_dev_bp_entry.insert(0, "400")  # Default value for Maximum Standard Deviation
-    
-    # Checkbox for Haplotype Phasing
-    global hap_phase_var
-    hap_phase_var = tk.IntVar(value=1)
-    hap_phase_checkbox = tk.Checkbutton(settings_window, text="Haplotype Phasing", variable=hap_phase_var)
-    hap_phase_checkbox.pack()
+    gui_minibar_prep()
+    gui_ngsid_prep()
+    gui_summary_prep()
 
 def input_check(file_path):
     if os.path.exists(file_path):
@@ -399,11 +243,12 @@ def input_check(file_path):
         log_print(f"NOTE:\tSelected file is invalid, please select a valid file: {file_path}")
         return False
 
-# Get the number of CPUs available on the system
-num_cpus = multiprocessing.cpu_count()
+# Test files
+# "D:/FunDiS/ONT04/combined.fastq.gz"
+# "/mnt/d/FunDiS/ONT04/combined.fastq.gz"
 
-# Calculate the number of threads as 80% of available CPUs & RAM
-cpu_threads = int(math.floor(num_cpus * PERCENT_RESOURCES))
+# Calculate the number of threads as specified percentage of available CPUs & RAM
+CPU_THREADS, _ = get_resource_values(PERCENT_RESOURCES)
 
 # Create root window
 root = tk.Tk()
@@ -413,8 +258,17 @@ root.title("FunDiS Nanopore Barcoding Pipeline")
 icon_image = PhotoImage(file="./fundis_icon.png")
 root.iconphoto(False, icon_image)
 
+# Initialize your Entry variables with default values in the main script body (not in a function)
+sample_size_entry = tk.Entry(root, width=50)
+sample_size_entry.insert(0, SAMPLE_SIZE)
+min_length_bp_entry = tk.Entry(root, width=50)
+min_length_bp_entry.insert(0, MIN_LENGTH_BP)
+max_std_dev_bp_entry = tk.Entry(root, width=50)
+max_std_dev_bp_entry.insert(0, MAX_STD_DEV_BP)
+hap_phase_var = tk.BooleanVar(value=HAP_PHASE_BOOL)
+
 # Set initial window size and allow resizing
-root.geometry("250x500")  # Width x Height
+root.geometry("500x900")  # Width x Height
 root.resizable(True, True)  # Allow resizing in both directions
 
 # Create a menu bar
@@ -422,8 +276,6 @@ menu_bar = tk.Menu(root)
 
 # Create a File menu and add commands
 file_menu = tk.Menu(menu_bar, tearoff=0)
-file_menu.add_command(label="Browse", command=choose_file)
-file_menu.add_command(label="Settings", command=open_settings_window)  # Add this line
 file_menu.add_separator()
 file_menu.add_command(label="Exit", command=exit_app)
 menu_bar.add_cascade(label="File", menu=file_menu)
@@ -445,27 +297,128 @@ logo_image = PhotoImage(file="./fundis_logo.png")
 logo_label = tk.Label(main_frame, image=logo_image)
 logo_label.pack(side=tk.TOP, padx=10, pady=10)
 
-# File Path Entry
-file_path_label = tk.Label(main_frame, text="NGSID gz Fastq Path:")
-file_path_label.pack()
-file_path_entry = tk.Entry(main_frame, width=50)
-file_path_entry.pack()
+# Set Percent Resources to use
+percent_resources_label = tk.Label(main_frame, text="Percent CPU Resources (0.00-1.00):")
+percent_resources_label.pack()
+percent_resources_entry = tk.Entry(main_frame, width=50)
+percent_resources_entry.insert(0, str(PERCENT_RESOURCES))
+percent_resources_entry.pack()
 
-# File Browser Button
-file_browse_button = tk.Button(main_frame, text="Browse", command=choose_file)
+# MiniBar File Path Entry
+minibar_file_path_label = tk.Label(main_frame, text="MiniBar Input fastq.gz Path:")
+minibar_file_path_label.pack()
+minibar_file_path_entry = tk.Entry(main_frame, width=50)
+minibar_file_path_entry.pack()
+
+# File Browser Button for Minibar file input
+file_browse_button = tk.Button(main_frame, text="Browse", command=choose_minibar_file)
 file_browse_button.pack()
+
+# Chopper Read Quality
+chopper_read_quality_label = tk.Label(main_frame, text="Chopper Lowest Quality Read Allowed:")
+chopper_read_quality_label.pack()
+chopper_read_quality_entry = tk.Entry(main_frame, width=50)
+chopper_read_quality_entry.insert(0, "10")  # Default value
+chopper_read_quality_entry.pack()
+
+# Chopper Max Length
+chopper_max_length_label = tk.Label(main_frame, text="Chopper Maximum Seuqence Length (bp):")
+chopper_max_length_label.pack()
+chopper_max_length_entry = tk.Entry(main_frame, width=50)
+chopper_max_length_entry.insert(0, "2500")  # Default value
+chopper_max_length_entry.pack()
+
+# Chopper Min Length
+chopper_min_length_label = tk.Label(main_frame, text="Chopper Minimum Sequence Length (bp):")
+chopper_min_length_label.pack()
+chopper_min_length_entry = tk.Entry(main_frame, width=50)
+chopper_min_length_entry.insert(0, "450")  # Default value
+chopper_min_length_entry.pack()
+
+# Minibar Percent Match
+minibar_percent_match_label = tk.Label(main_frame, text="Minibar Percent Match (0.00-1.00):")
+minibar_percent_match_label.pack()
+minibar_percent_match_entry = tk.Entry(main_frame, width=50)
+minibar_percent_match_entry.insert(0, "")  # Default value
+minibar_percent_match_entry.pack()
+
+# Minibar Barcode Edit Distance
+minibar_barcode_edit_dist_label = tk.Label(main_frame, text="Minibar Barcode Edit Distance (bp):")
+minibar_barcode_edit_dist_label.pack()
+minibar_barcode_edit_dist_entry = tk.Entry(main_frame, width=50)
+minibar_barcode_edit_dist_entry.insert(0, "")  # Default value
+minibar_barcode_edit_dist_entry.pack()
+
+# Minibar Primer Edit Distance
+minibar_primer_edit_dist_label = tk.Label(main_frame, text="Minibar Primer Edit Distance (bp):")
+minibar_primer_edit_dist_label.pack()
+minibar_primer_edit_dist_entry = tk.Entry(main_frame, width=50)
+minibar_primer_edit_dist_entry.insert(0, "")  # Default value
+minibar_primer_edit_dist_entry.pack()
+
+# Minibar Search Length
+minibar_search_length_label = tk.Label(main_frame, text="Minibar Search Length (bp):")
+minibar_search_length_label.pack()
+minibar_search_length_entry = tk.Entry(main_frame, width=50)
+minibar_search_length_entry.insert(0, "")  # Default value
+minibar_search_length_entry.pack()
 
 # MiniBar Button
 minibar_prep_button = tk.Button(main_frame, text="Run MiniBar", command=gui_minibar_prep)
 minibar_prep_button.pack(fill=tk.BOTH, expand=True)
 
+# Advanced Settings Directly on Main Menu
+ngsid_folder_path_label = tk.Label(main_frame, text="NGSID Input Folder Path:")
+ngsid_folder_path_label.pack()
+ngsid_folder_path_entry = tk.Entry(main_frame, width=50)
+ngsid_folder_path_entry.pack()
+
+# File Browser Button for NGSpeciesID folder input
+file_browse_button = tk.Button(main_frame, text="Browse", command=lambda: choose_file_or_folder(ngsid_folder_path_entry))
+file_browse_button.pack()
+
+sample_size_label = tk.Label(main_frame, text="NGSID Sample Size (n):")
+sample_size_label.pack()
+sample_size_entry = tk.Entry(main_frame, width=50)
+sample_size_entry.insert(0, SAMPLE_SIZE)
+sample_size_entry.pack()
+
+min_length_bp_label = tk.Label(main_frame, text="NGSID Min Length of Sequence (bp):")
+min_length_bp_label.pack()
+min_length_bp_entry = tk.Entry(main_frame, width=50)
+min_length_bp_entry.insert(0, MIN_LENGTH_BP)
+min_length_bp_entry.pack()
+
+max_std_dev_bp_label = tk.Label(main_frame, text="NGSID Max Standard Deviation (bp):")
+max_std_dev_bp_label.pack()
+max_std_dev_bp_entry = tk.Entry(main_frame, width=50)
+max_std_dev_bp_entry.insert(0, MAX_STD_DEV_BP)
+max_std_dev_bp_entry.pack()
+
+hap_phase_checkbox = tk.Checkbutton(main_frame, text="NGSID Haplotype Phasing", variable=hap_phase_var)
+hap_phase_checkbox.pack()
+
 # NGSpecies ID Button
 ngsid_prep_button = tk.Button(main_frame, text="Run NGSpeciesID", command=gui_ngsid_prep)
 ngsid_prep_button.pack(fill=tk.BOTH, expand=True)
 
+# Summarize Input
+summary_folder_path_label = tk.Label(main_frame, text="Summarize Input Folder Path:")
+summary_folder_path_label.pack()
+summary_folder_path_entry = tk.Entry(main_frame, width=50)
+summary_folder_path_entry.pack()
+
+# File Browser Button for Summarize folder input
+file_browse_button = tk.Button(main_frame, text="Browse", command=lambda: choose_file_or_folder(summary_folder_path_entry))
+file_browse_button.pack()
+
 # Summary Button
-summary_prep_button = tk.Button(main_frame, text="Run MycoMap Summary", command=gui_summary_prep)
+summary_prep_button = tk.Button(main_frame, text="Run MycoMap Summary", command = gui_summary_prep)
 summary_prep_button.pack(fill=tk.BOTH, expand=True)
+
+# Full Pipeline Button
+full_pipe_button = tk.Button(main_frame, text="Run Full Pipeline", command = full_pipe)
+full_pipe_button.pack(fill=tk.BOTH, expand=True)
 
 # Run main tkinter GUI loop
 root.mainloop()
