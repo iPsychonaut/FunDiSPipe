@@ -25,6 +25,7 @@ This application is designed to be run on a Linux/WSL environment and requires t
 - blast==2.15.0
 - pyvcf==0.6.8
 - fastqc==0.12.1
+- chopper==0.7.0
 
 The application also relies on the following tools:
 - NGSpeciesID (https://github.com/ksahlin/NGSpeciesID)
@@ -47,7 +48,7 @@ mamba install -y -c bioconda -c conda-forge -c agbiome -c prkrekel numpy==1.26.3
 
 fundis_env installs
 ```bash
-conda activate fundis_env && mamba install -y -c bioconda -c conda-forge -c agbiome -c prkrekel pandas==2.0.3 openblas==0.3.3 biopython==1.81 samtools==1.18 minimap2==2.26 bcftools==1.17 bwa==0.7.17 whatshap==2.1 spoa==4.1.3 racon==1.5.0 psutil==5.9.8 blast==2.15.0 pyvcf==0.6.8 fastqc==0.12.1 && pip install NGSpeciesID && conda deactivate
+conda activate fundis_env && mamba install -y -c bioconda -c conda-forge -c agbiome -c prkrekel pandas==2.0.3 openblas==0.3.3 biopython==1.81 samtools==1.18 minimap2==2.26 bcftools==1.17 bwa==0.7.17 whatshap==2.1 spoa==4.1.3 racon==1.5.0 psutil==5.9.8 blast==2.15.0 pyvcf==0.6.8 fastqc==0.12.1 chopper==0.7.0 && pip install NGSpeciesID && conda deactivate
 ```
 
 medaka env installs
@@ -80,11 +81,11 @@ conda activate medaka && mamba install -y -c bioconda -c conda-forge -c agbiome 
 5. **MycoMap Summarizer (MycoMap_Summarize.py)** (https://www.protocols.io/view/primary-data-analysis-basecalling-demultiplexing-a-dm6gpbm88lzp/v3?step=3):
    - Aggregates results from the entire pipeline.
    - Produces comprehensive summary reports for analysis and interpretation.
-   - Simplifies data review and sharing.
+   - Simplifies data review and sharing via MycoMap.
 
 ## Inputs and Outputs
 
-- **Input**: `.fastq.gz` file containing Oxford Nanopore Guppy Basecalled sequences.
+- **Input**: `.fastq.gz` or `.fastq` file containing Oxford Nanopore Guppy Basecalled sequences.
 - **Outputs**:
   - Processed and quality-checked sequence data.
   - Species identification reports and detailed analysis.
@@ -101,11 +102,11 @@ conda activate fundis_env && python FunDiS_GUI.py
 Then navigate the GUI to select your input files. Here’s a brief guide on using each module:
 
 - **GUI**: Launch the GUI script to access the pipeline's functionalities. The interface is intuitive and guides you through the process.
-- **Mini-Barcoder**: After selecting your `.fastq.gz` file, this module will prepare it for the NGSpeciesID analysis.
+- **Mini-Barcoder**: After selecting your `.fastq.gz` or `.fastq` file, this module will prepare it for the NGSpeciesID analysis by running Chopper and Minibar.
 - **NGSpeciesID**: Once the data is prepped, use this module for species identification. The output will include detailed species information.
    - **Haplotype Phaser**: An advanced setting that will perform a dual analysis and preserve haplotypes with IUPAC ambiguities and lower-case letters for insertions/deletions.
 - **MycoMap Summarizer**: Finally, to aggregate and summarize your results, use this module. It consolidates the data into an easy-to-interpret format.
-   - FEATURE PENDING **Haplotype Phaser**: An advanced setting that will use the Phased Haplotype file instead of the traditionally used medaka consensus file.
+   - **Haplotype Phaser**: An advanced setting that will use the Phased Haplotype file instead of the traditionally used medaka consensus file.
 
 For detailed instructions and options for each module, refer to the comments and documentation within each script file. These instructions provide guidance on executing the scripts and customizing the analysis to your requirements.
 
