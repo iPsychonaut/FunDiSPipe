@@ -12,66 +12,14 @@ Protocol Link: https://www.protocols.io/view/primary-data-analysis-basecalling-d
 """
 
 # Base Python Imports
-import subprocess, os, gzip
+import os, gzip
 
-# Required Python Imports
-from termcolor import cprint
-from datetime import datetime
+# Custom Python Imports
+from FunDiS_Tools import log_print, generate_log_file, initialize_logging_environment, run_subprocess_cmd
 
-# Set Global File
-DEFAULT_LOG_FILE = None
-
-# Function to color coded print to console and save to log_file information
-def log_print(input_message, log_file=None):
-    """
-    Logs a message to a file and prints it to the console with appropriate coloring.
-    
-    This function takes a message and logs it to the specified file. Additionally, the message is printed to the 
-    console, potentially with specific coloring depending on the context.
-    
-    Parameters:
-        input_message (str): Message to be logged and printed.
-        log_file (str): Path to the log file.
-
-    Notes:
-        - The function uses a global default log file if none is specified.
-        - Timestamps each log entry for easy tracking.
-        - Utilizes color coding in the console to distinguish between different types of messages (e.g., errors, warnings).
-        - Supports color coding for specific message types: NOTE, CMD, ERROR, WARN, and PASS.
-        - Falls back to default (white) color if the message type is unrecognized.
-    """
-    # Access the global variable
-    global DEFAULT_LOG_FILE
-    
-    # Use the default log file if none specified
-    if log_file is None:
-        log_file = DEFAULT_LOG_FILE  
-    
-    # Establish current date-time
-    now = datetime.now()
-    message = f'[{now:%Y-%m-%d %H:%M:%S}]\t{input_message}'
-
-    # Determine the print color based on the input_message content
-    message_type_dict = {'NOTE': ['blue'],
-                         'CMD': ['cyan'],
-                         'ERROR': ['red'],
-                         'WARN': ['yellow'],
-                         'PASS': ['green'],}
-    print_color = ['white']  # Default color
-    for key, value in message_type_dict.items():
-        if key.lower() in input_message.lower():
-            print_color = value
-            break
-
-    # Writing the message to the log file
-    with open(log_file, 'a') as file:
-        print(message, file=file)
-
-    # Handling different message types for colored printing
-    try:
-        cprint(message, print_color[0])
-    except (KeyError, IndexError):
-        cprint(message, print_color[1] if len(print_color) > 1 else 'white')
+# Global output_area variable
+CPU_THREADS = 1
+PERCENT_RESOURCES = 0.75
 
 # Function to unzip .fastq.gz file with gzip.
 def unzip_fastq(ngsid_fastq_gz_path, ngsid_fastq_path):
@@ -90,7 +38,7 @@ def unzip_fastq(ngsid_fastq_gz_path, ngsid_fastq_path):
             f_out.write(f_in.read())
 
 # Wrapper function to run ngsid_minibar_prep in a separate thread.
-def run_minibar_prep(minibar_path, minibar_index_path, ngsid_fastq_gz_path, ngsid_output_dir):
+def run_minibar_prep(minibar_path, minibar_index_path, ngsid_fastq_gz_path, ngsid_output_dir, chopper_command_dict, minibar_command_dict):
     """
     Wrapper function to run minibar preparation in a separate thread.
     
@@ -102,18 +50,20 @@ def run_minibar_prep(minibar_path, minibar_index_path, ngsid_fastq_gz_path, ngsi
         minibar_index_path (str): Path to the minibar index file.
         ngsid_fastq_gz_path (str): Path to the compressed FASTQ file.
         ngsid_output_dir (str): Directory path for storing output files.
+        chopper_command_dict (dict): Dictionary containing chopper settings.
+        minibar_command_dict (dict): Dictionary containing MiniBar settings.
     
     Notes:
         - Logs an error message if an exception is encountered during the minibar preparation.
     """
     global DEFAULT_LOG_FILE
     try:
-        minibar_prep(minibar_path, minibar_index_path, ngsid_fastq_gz_path, ngsid_output_dir)
+        minibar_prep(minibar_path, minibar_index_path, ngsid_fastq_gz_path, ngsid_output_dir, chopper_command_dict, minibar_command_dict)
     except Exception as e:
         log_print( f"ERROR:\t{str(e)}")
 
 # Function to perform minibar preparation  
-def minibar_prep(minibar_path, minibar_index_path, ngsid_fastq_gz_path, ngsid_output_dir):
+def minibar_prep(minibar_path, minibar_index_path, input_file_path, ngsid_output_dir, chopper_command_dict, minibar_command_dict):
     """
     Performs minibar preparation for NGSpeciesID processing.
     
@@ -123,8 +73,10 @@ def minibar_prep(minibar_path, minibar_index_path, ngsid_fastq_gz_path, ngsid_ou
     Parameters:
         minibar_path (str): Path to the minibar script.
         minibar_index_path (str): Path to the minibar index file.
-        ngsid_fastq_gz_path (str): Path to the compressed FASTQ file.
+        input_file_path (str): Path to the compressed FASTQ file.
         ngsid_output_dir (str): Directory path for storing output files.
+        chopper_command_dict (dict): Dictionary containing chopper settings.
+        minibar_command_dict (dict): Dictionary containing MiniBar settings.
     
     Global Variables:
         output_area (str): A global variable used for logging output messages.
@@ -135,39 +87,49 @@ def minibar_prep(minibar_path, minibar_index_path, ngsid_fastq_gz_path, ngsid_ou
         - Handles and logs file removal errors.
     """
     global DEFAULT_LOG_FILE
-    log_print( f"Prepping {ngsid_fastq_gz_path} for NGSpeciesID with minibar...")
-    ngsid_fastq_path = ngsid_fastq_gz_path.replace(".gz", "")
-    
-    if os.path.exists(ngsid_fastq_path):
-        log_print( "PASS:\tSkipping extraction, files already exist")
-    else:
-        unzip_fastq(ngsid_fastq_gz_path, ngsid_fastq_path)
-
     main_dir = os.getcwd()
+    log_print(f"Prepping {input_file_path} for NGSpeciesID with minibar...")
+
+    # Determine if the file is compressed (.gz) and set the correct chopper command
+    if input_file_path.endswith(".gz"):
+        log_print(f"File is compressed: {input_file_path}")
+        chopper_input_cmd = f"gunzip -c {input_file_path}"
+        uncompressed_fastq_path = input_file_path.replace(".gz","")  # Remove .gz extension
+    else:
+        log_print(f"File is uncompressed: {input_file_path}")
+        chopper_input_cmd = f"cat {input_file_path}"
+        uncompressed_fastq_path = input_file_path
+
+    # Ensure the output directory exists
     if not os.path.exists(ngsid_output_dir):
         os.makedirs(ngsid_output_dir)
     os.chdir(ngsid_output_dir)
-        
-    minibar_cmd = [minibar_path, "-F", minibar_index_path, ngsid_fastq_path] # TODO: Be able to adjust the number of differences allowed for in primer sequence
-    log_print( f"CMD:\t{' '.join(minibar_cmd)}")
-    process = subprocess.run(minibar_cmd, capture_output=True, text=True)
-    log_print( process.stdout)
-    log_print( process.stderr)
+
+    # Construct the chopper command
+    chopper_cmd_str = f"{chopper_input_cmd} | chopper -q {chopper_command_dict['-q']} -l {chopper_command_dict['--minlength']} --maxlength {chopper_command_dict['--maxlength']} --threads {CPU_THREADS}"
     
-    if process.returncode != 0:
-        log_print( f"ERROR:\t{process.stderr}")
-    else:
-        log_print( f"PASS:\tSuccessfully processed {ngsid_fastq_path} with minibar and cleaned up files")
+    # Construct minibar command
+    minibar_cmd_str = f"{minibar_path} -F {minibar_index_path} -i - --outfolder {ngsid_output_dir}"
+    for key, value in minibar_command_dict.items():
+        if value != "":
+            minibar_cmd_str += f" {key} {value}"
+        elif value == True:  # Assuming some keys might be flags without explicit values
+            minibar_cmd_str += f" {key}"
+
+    # Combine the chopper and minibar commands
+    combined_cmd_str = f"{chopper_cmd_str} | {minibar_cmd_str}"
+
+    run_subprocess_cmd(combined_cmd_str, shell_check=True)
     
-    for file in [f"{ngsid_output_dir}/sample_Multiple_Matches.fastq", "sample_unk.fastq"]:
-        try:
-            os.remove(file)
-            log_print( f"PASS:\tRemoved file: {file}")
-        except OSError as e:
-            log_print( f"ERROR:\tDuring file removal {file}: {e}")
+    # TODO: Do not remove these files until future notice
+    # for file in [f"{ngsid_output_dir}/sample_Multiple_Matches.fastq", f"{ngsid_output_dir}/sample_unk.fastq", uncompressed_fastq_path]:
+    #     try:
+    #         os.remove(file)
+    #         log_print( f"PASS:\tRemoved file: {file}")
+    #     except OSError as e:
+    #         log_print( f"ERROR:\tDuring file removal {file}: {e}")
 
     os.chdir(main_dir)
 
 if  __name__ == "__main__":
-    global DEFAULT_LOG_FILE
     log_print("UNLOGGED DEBUG:\tUNDEVELOPED FunDiS_Minibar.py DEBUG AREA")
