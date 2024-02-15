@@ -4,6 +4,13 @@ Created on Wed Nov 29 12:23:15 2023
 
 @author: ian.michael.bollinger@gmail.com/researchconsultants@critical.consulting
 
+Can be run on it's own using the following command:
+    python MycoMap_Summarize.py -i /path/to/folder/to/summarize -c 40 -p True
+    
+    -i, --input_folder (str): The path to the folder containing NGSpeciesID output folders needing processing for MycoMap.
+    -c, --min_cutoff (int): Minimum number of Reads in Consensus (RiC) allowed for processing for MycoMap.
+    -p, --haplotype_phase (bool): True/False of whether or not Haplotype Phasing data should be processed.
+
 This is the MycoMap Summarizer (summarize.py) developed for a modified protocol by
 
 Stephen Douglas Russell and paid for by the Fungal Diversity Survey (FunDiS).
@@ -12,7 +19,7 @@ Protocol Link: https://www.protocols.io/view/primary-data-analysis-basecalling-d
 """
 
 # Base Python Imports
-import csv, os, re, glob, shutil, time
+import csv, os, re, glob, shutil, time, argparse
 from pathlib import Path
 from Bio import SeqIO
 
@@ -233,22 +240,24 @@ def process_medaka_folder(medaka_folder, summary_folder, summary_ric_cutoff):
 
 def move_updated_fasta(updated_fasta_path, summary_folder, consensus_path, parent_folder_name, filename, reads):
     """
-    DESCRIPTION NEEDED.
+    Moves the updated FASTA file to a specified summary folder and copies associated FASTQ files.
 
     Args:
-        summary_folder (TYPE NEEDED): DESCRIPTION NEEDED.
-        consensus_path (TYPE NEEDED): DESCRIPTION NEEDED.
-        parent_folder_name (TYPE NEEDED): DESCRIPTION NEEDED.
-        filename (TYPE NEEDED): DESCRIPTION NEEDED.
-        reads (TYPE NEEDED): DESCRIPTION NEEDED.
+        updated_fasta_path (str): The target path for the updated FASTA file after moving.
+        summary_folder (str): The path to the summary folder where the FASTA file is stored.
+        consensus_path (str): The original path of the consensus FASTA file.
+        parent_folder_name (str): The name of the parent folder for organization in the summary folder.
+        filename (str): The name of the file, used to generate the final path.
+        reads (int): The number of reads in the consensus sequence, used in naming the FASTQ files.
 
     Notes:
-        -
-        -
-        -
-            
+        - This function moves the consensus FASTA file to the updated path and copies related FASTQ files into a
+          designated 'FASTQ Files' directory within the summary folder.
+        - The function ensures the correct organization and accessibility of sequence data for downstream analysis.
+        - Uses a brief delay before moving files to ensure file accessibility, especially in networked or slow file systems.
+
     Example:
-        generate_summary(stats, writer)
+        move_updated_fasta("/path/to/summary_folder/updated.fasta", "/path/to/summary_folder", "/path/to/consensus.fasta", "sample_01", "sample_01-100", 200)
     """
     # Wait for a moment before moving the file
     time.sleep(0.5)
@@ -270,19 +279,18 @@ def move_updated_fasta(updated_fasta_path, summary_folder, consensus_path, paren
 
 def merge_fasta_files(summary_folder, output_file):
     """
-    DESCRIPTION NEEDED.
+    Merges all FASTA files in the summary folder into a single output file.
 
     Args:
-        summary_folder (TYPE NEEDED): DESCRIPTION NEEDED.
-        output_file (TYPE NEEDED): DESCRIPTION NEEDED.
-        
+        summary_folder (str): The directory containing individual FASTA files to be merged.
+        output_file (str): The name of the file to which the merged FASTA contents will be written.
+
     Notes:
-        - 
-        -
-        -
-            
+        - This function is useful for creating a comprehensive FASTA file that aggregates all sequences from a project or experiment.
+        - The resulting file is suitable for further analyses or submissions to sequence databases.
+
     Example:
-        merge_fasta_files(summary_folder, 'summary.fasta')
+        merge_fasta_files("/path/to/summary_folder", "combined_sequences.fasta")
     """
     with open(os.path.join(summary_folder, output_file), 'w') as f_out:
         for fasta_file in sorted(glob.glob(f'{summary_folder}/*.fasta')):
@@ -291,19 +299,19 @@ def merge_fasta_files(summary_folder, output_file):
 
 def generate_summary(stats, writer):
     """
-    DESCRIPTION NEEDED.
+    Generates a summary table from provided statistics and writes it using a CSV writer.
 
     Args:
-        stats (TYPE NEEDED): DESCRIPTION NEEDED.
-        writer (TYPE NEEDED): DESCRIPTION NEEDED.
-        
+        stats (list): A list of lists, where each sublist contains information about a sequence (e.g., filename, length, reads, ID).
+        writer (csv.writer): An initialized CSV writer object to write the summary table.
+
     Notes:
-        -
-        -
-        -
-            
+        - This function calculates the total unique samples, total consensus sequences, and total reads in consensus sequences.
+        - It handles both standard and additional stats, segregating entries that contain 'ONT' more than once for special consideration.
+        - The summary includes a breakdown by unique sample as well as cumulative totals.
+
     Example:
-        generate_summary(stats, writer)
+        generate_summary(stats, csv_writer)
     """
     # Set placeholders for stats
     summary_totals = {'Total Unique Samples': 0,
@@ -344,19 +352,20 @@ def generate_summary(stats, writer):
 # Main Summary Function
 def summary_main(source_folder, summary_ric_cutoff, hap_phase_bool):
     """
-    DESCRIPTION NEEDED.
+    Main function to generate a summary of sequence data processing results.
 
     Args:
-        source_folder (str): Path to the output of NGSpeciesID.
-        hap_phase_bool (bool): True/False on whether Haplotype Phasing was performed.
-        
+        source_folder (str): The root directory containing processed sequence data from different samples.
+        summary_ric_cutoff (int): The read-in-consensus (RiC) cutoff for including sequences in the summary.
+        hap_phase_bool (bool): Indicates whether haplotype phasing was considered in processing.
+
     Notes:
-        -
-        -
-        -
-            
+        - This function orchestrates the creation of a summary folder, collection of statistics from each sample,
+          and the generation of a comprehensive summary and merged FASTA file.
+        - It is designed to provide an overview and facilitate the review of sequence processing outcomes.
+
     Example:
-        summary_main(source_folder, False)
+        summary_main("/path/to/processed_data", 40, True)
     """
     print(source_folder)
     print(summary_ric_cutoff)
@@ -391,26 +400,24 @@ def summary_main(source_folder, summary_ric_cutoff, hap_phase_bool):
         
     # Run final FASTA merging function
     merge_fasta_files(summary_folder, 'summary.fasta')
-    log_print('MycoMap Summarize Complete!')
+    log_print('PASS:\tMycoMap Summarize Complete!')
 
 # Wrapper function to run ngsid_prep in a separate thread
 def run_summary_prep(source_folder, summary_ric_cutoff, hap_phase_bool):
     """
-    Wrapper function to run summary preparation in a separate thread.
-
-    This function initiates the summary preparation process, potentially for generating summaries of data processing. 
-    It handles the execution in a separate thread and logs the start of the process and any errors encountered.
+    Wrapper function to initiate the summary preparation process in a separate execution context.
 
     Args:
-        source_folder (str): Path to the output of NGSpeciesID.
-        hap_phase_bool (bool): True/False on whether Haplotype Phasing was performed.
+        source_folder (str): The directory where sequence data processing results are stored.
+        summary_ric_cutoff (int): The minimum number of reads in consensus required to include a sequence in the summary.
+        hap_phase_bool (bool): Flag to indicate whether haplotype phasing was performed.
 
     Notes:
-        - The actual summary preparation logic (e.g., summary_main) needs to be implemented or called within this function.
-        - Catches and logs exceptions that may occur during summary preparation.
-            
+        - This function is designed to be run as a separate thread or process, allowing for non-blocking execution of the summary generation.
+        - It logs the start of the process and captures any errors that may occur, facilitating debugging and ensuring robust operation.
+
     Example:
-        run_summary_prep(INPUT_FOLDER, "40", False)
+        run_summary_prep("/path/to/sequence_data", 40, False)
     """
     log_print("MycoMap Summary preparation started...\n")
     
@@ -419,10 +426,32 @@ def run_summary_prep(source_folder, summary_ric_cutoff, hap_phase_bool):
     except Exception as e:
         print( f"ERROR:\t{str(e)}")
 
-# Debug/Testing Area
+def parse_arguments():
+    """
+    Parses command line arguments.
+
+    Returns:
+        argparse.Namespace: An object containing the parsed command line arguments.
+    """
+    parser = argparse.ArgumentParser(description="MycoMap Summarizer")
+    parser.add_argument('-i', '--input_folder', type=str, required=True, default="/mnt/d/FunDiS/ONT02/combined",
+                        help='The path to the folder containing NGSpeciesID output folders needing processing for MycoMap.')
+    parser.add_argument('-c', '--min_cutoff', type=int, required=True, default="40",
+                        help='Minimum number of Reads in Consensus (RiC) allowed for processing for MycoMap.')
+    parser.add_argument('-p', '--haplotype_phase', type=lambda x: (str(x).lower() in ['true', '1', 'yes']), default=False,
+                        required=True, help='True/False of whether or not Haplotype Phasing data should be processed.')
+
+    return parser.parse_args()
+
 if __name__ == "__main__":
-    # INPUT_FOLDER = "D:/FunDiS/ONT04/combined"
-    INPUT_FOLDER = "/mnt/d/FunDiS/ONT02/combined"
+    """
+    Main argument if run directly from command line, parses inputs as arguments as well.
+    """
+    args = parse_arguments()
+
+    INPUT_FOLDER = args.input_folder
+    SUMMARY_RIC_CUTOFF = args.min_cutoff
+    HAPLOTYPE_PHASE = args.haplotype_phase
 
     # Generate log file with the desired behavior
     initialize_logging_environment(INPUT_FOLDER)
