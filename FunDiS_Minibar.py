@@ -12,7 +12,7 @@ Protocol Link: https://www.protocols.io/view/primary-data-analysis-basecalling-d
 """
 
 # Base Python Imports
-import os, gzip
+import os, gzip, tempfile
 
 # Custom Python Imports
 from FunDiS_Tools import log_print, generate_log_file, initialize_logging_environment, run_subprocess_cmd
@@ -104,25 +104,29 @@ def minibar_prep(minibar_path, minibar_index_path, input_file_path, ngsid_output
     if not os.path.exists(ngsid_output_dir):
         os.makedirs(ngsid_output_dir)
     os.chdir(ngsid_output_dir)
-
-    # Construct the chopper command
-    chopper_cmd_str = f"{chopper_input_cmd} | chopper -q {chopper_command_dict['-q']} -l {chopper_command_dict['--minlength']} --maxlength {chopper_command_dict['--maxlength']} --threads {CPU_THREADS}"
+       
+    # Construct the chopper command to write output to a temporary file
+    with tempfile.NamedTemporaryFile(delete=False, mode='w+', dir=ngsid_output_dir, suffix=".fastq") as temp_fastq:
+        chopper_cmd_str = f"{chopper_input_cmd} | chopper -q {chopper_command_dict['-q']} -l {chopper_command_dict['--minlength']} --maxlength {chopper_command_dict['--maxlength']} --threads {chopper_command_dict['--threads']} > {temp_fastq.name}"
+        run_subprocess_cmd(chopper_cmd_str, shell_check=True)
+        temp_fastq_path = temp_fastq.name
     
-    # Construct minibar command
-    minibar_cmd_str = f"{minibar_path} -F {minibar_index_path} -i - --outfolder {ngsid_output_dir}"
+    # Construct minibar command using the temporary file as input
+    minibar_cmd_str = f"{minibar_path} -F {minibar_index_path} {temp_fastq_path}"
     for key, value in minibar_command_dict.items():
         if value != "":
             minibar_cmd_str += f" {key} {value}"
         elif value == True:  # Assuming some keys might be flags without explicit values
             minibar_cmd_str += f" {key}"
-
-    # Combine the chopper and minibar commands
-    combined_cmd_str = f"{chopper_cmd_str} | {minibar_cmd_str}"
-
-    run_subprocess_cmd(combined_cmd_str, shell_check=True)
+    
+    # Execute the minibar command
+    run_subprocess_cmd(minibar_cmd_str, shell_check=True)
+    
+    # Clean up the temporary file
+    os.unlink(temp_fastq_path)
     
     # TODO: Do not remove these files until future notice
-    # for file in [f"{ngsid_output_dir}/sample_Multiple_Matches.fastq", f"{ngsid_output_dir}/sample_unk.fastq", uncompressed_fastq_path]:
+    # for file in [f"{ngsid_output_dir}/sample_Multiple_Matches.fastq", f"{ngsid_output_dir}/sample_unk.fastq"]:
     #     try:
     #         os.remove(file)
     #         log_print( f"PASS:\tRemoved file: {file}")
