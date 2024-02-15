@@ -15,8 +15,6 @@ Protocol Link: https://www.protocols.io/view/primary-data-analysis-basecalling-d
 import os, re, subprocess, multiprocessing, argparse
 
 # Required Python Imports
-from termcolor import cprint
-from datetime import datetime
 import pandas as pd
 from Bio import SeqIO
 from Bio.Blast.Applications import NcbiblastnCommandline
@@ -24,74 +22,12 @@ from Bio.SeqIO.QualityIO import FastqGeneralIterator
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
-# Function to color coded print to console and save to log_file information
-def log_print(input_message, log_file=None):
-    """
-    Logs a message to a file and prints it to the console with appropriate coloring.
-    
-    This function takes a message and logs it to the specified file. Additionally, the message is printed to the 
-    console, potentially with specific coloring depending on the context.
-    
-    Parameters:
-        input_message (str): Message to be logged and printed.
-        log_file (str): Path to the log file.
+# Custom Python Imports
+from FunDiS_Tools import log_print, generate_log_file, initialize_logging_environment, run_subprocess_cmd, get_resource_values
 
-    Notes:
-        - The function uses a global default log file if none is specified.
-        - Timestamps each log entry for easy tracking.
-        - Utilizes color coding in the console to distinguish between different types of messages (e.g., errors, warnings).
-        - Supports color coding for specific message types: NOTE, CMD, ERROR, WARN, and PASS.
-        - Falls back to default (white) color if the message type is unrecognized.
-    """
-    # Access the global variable
-    global DEFAULT_LOG_FILE
-    
-    # Use the default log file if none specified
-    if log_file is None:
-        log_file = DEFAULT_LOG_FILE  
-    
-    # Establish current date-time
-    now = datetime.now()
-    message = f'[{now:%Y-%m-%d %H:%M:%S}]\t{input_message}'
-
-    # Determine the print color based on the input_message content
-    message_type_dict = {'NOTE': ['blue'],
-                         'CMD': ['cyan'],
-                         'ERROR': ['red'],
-                         'WARN': ['yellow'],
-                         'PASS': ['green'],}
-    print_color = ['white']  # Default color
-    for key, value in message_type_dict.items():
-        if key.lower() in input_message.lower():
-            print_color = value
-            break
-
-    # Writing the message to the log file
-    with open(log_file, 'a') as file:
-        print(message, file=file)
-
-    # Handling different message types for colored printing
-    try:
-        cprint(message, print_color[0])
-    except (KeyError, IndexError):
-        cprint(message, print_color[1] if len(print_color) > 1 else 'white')
-
-def run_subprocess_cmd(cmd_list, shell_check):
-    if isinstance(cmd_list, str):
-        log_print(f"CMD:\t{cmd_list}")    
-        process = subprocess.run(cmd_list, text=True, shell=shell_check, capture_output=True)
-        if process.returncode != 0:
-            log_print(f"ERROR:\t{process.stderr}")
-        else:
-            log_print(f"PASS:\tSuccessfully processed command: {cmd_list}")
-    else:        
-        log_print(f"CMD:\t{' '.join(cmd_list)}")    
-        process = subprocess.run(cmd_list, text=True, shell=shell_check, capture_output=True)
-        if process.returncode != 0:
-            log_print(f"ERROR:\t{process.stderr}")
-        else:
-            log_print(f"PASS:\tSuccessfully processed command: {' '.join(cmd_list)}")
-
+# Global output_area variable
+CPU_THREADS = 1
+PERCENT_RESOURCES = 0.75
 
 def run_blast(query_file, db_file, add_headers=True):
     log_print("BLASTING query against database...")
@@ -135,8 +71,9 @@ def find_latest_paf_file(directory):
 def check_and_add_rg_to_bam(bam_file, reference_seq_ids):
     modified_bam_file = bam_file.replace(".bam", "_rg_added.bam")
     existing_rgs = set()
-    cmd = f"samtools view -H {bam_file}"
-    process = subprocess.run(cmd, shell=True, text=True, stdout=subprocess.PIPE)
+    samtools_view_cmd = f"samtools view -H {bam_file}"
+    
+    process = subprocess.run(samtools_view_cmd, shell=True, text=True, stdout=subprocess.PIPE)
     if process.returncode != 0:
         log_print(f"ERROR:\t{process.stderr}")
         return None
@@ -148,11 +85,11 @@ def check_and_add_rg_to_bam(bam_file, reference_seq_ids):
     for seq_id in reference_seq_ids:
         if seq_id not in existing_rgs:
             log_print(f"Adding Read Group for {seq_id} to BAM file")
-            cmd = f"samtools addreplacerg -r \"@RG\\tID:{seq_id}\\tSM:{seq_id}\" -o {modified_bam_file} {bam_file}"
-            process = subprocess.run(cmd, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            if process.returncode != 0:
-                log_print(f"ERROR:\t{process.stderr}")
-                return None
+            samtools_cmd = ["samtools", "addreplacerg",
+                            "-r", f"@RG\\tID:{seq_id}\\tSM:{seq_id}",
+                            "-o", modified_bam_file,
+                            bam_file]
+            run_subprocess_cmd(samtools_cmd, False)            
             bam_file = modified_bam_file  # Update BAM file for next iteration
 
     if bam_file != modified_bam_file:
@@ -221,8 +158,9 @@ def determine_medaka_consensus_seqs(fastq_file, seq):
     read_names_file = read_names_bam.replace(".bam",".txt")
 
     # Running samtools view and capturing output
-    cmd = f"samtools view {read_names_bam}"
-    process = subprocess.run(cmd, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    samtools_view_cmd = f"samtools view {read_names_bam}"
+    
+    process = subprocess.run(samtools_view_cmd, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if process.returncode != 0:
         log_print(f"ERROR:\t{process.stderr}")
         return None
@@ -309,59 +247,67 @@ def combine_fastq_files(racon_fastq, medaka_fastq, output_fastq):
     log_print(f"PASS:\tCombined FASTQ file written to {output_fastq}")
 
 def create_phased_fasta(reference_seq_file, phased_vcf_file, seq, consensus_seq_count):
-    log_print("Generating phased FASTA file from phased VCF data...")
-    phased_fasta_file = phased_vcf_file.replace(".vcf", ".fasta")
-
-    # Define the IUPAC ambiguity codes
-    iupac_ambiguity = {('A', 'C'): 'M', ('A', 'G'): 'R', ('A', 'T'): 'W',
-                       ('C', 'G'): 'S', ('C', 'T'): 'Y', ('G', 'T'): 'K',
-                       ('C', 'A'): 'M', ('G', 'A'): 'R', ('T', 'A'): 'W',
-                       ('G', 'C'): 'S', ('T', 'C'): 'Y', ('T', 'G'): 'K'}
-
-    # Load the reference sequence
-    reference_seq_record = next(SeqIO.parse(reference_seq_file, "fasta"))
-    reference_seq_list = list(reference_seq_record.seq)
-
-    # Load VCF data into a DataFrame
-    vcf_df = pd.read_csv(phased_vcf_file, sep='\t', comment='#', 
-                         names=["CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT", "SAMPLE_DATA"])
+    try:
+        log_print("Generating phased FASTA file from phased VCF data...")
+        phased_fasta_file = phased_vcf_file.replace(".vcf", ".fasta")
     
-    # Iterate through VCF DataFrame
-    for index, row in vcf_df.iterrows():
-        pos = int(row['POS']) - 1
-        ref = row['REF']
-        alt = row['ALT'].split(',')[0]  # Consider the first alternate allele
+        # Define the IUPAC ambiguity codes
+        iupac_ambiguity = {('A', 'C'): 'M', ('A', 'G'): 'R', ('A', 'T'): 'W',
+                           ('C', 'G'): 'S', ('C', 'T'): 'Y', ('G', 'T'): 'K',
+                           ('C', 'A'): 'M', ('G', 'A'): 'R', ('T', 'A'): 'W',
+                           ('G', 'C'): 'S', ('T', 'C'): 'Y', ('T', 'G'): 'K'}
+    
+        # Load the reference sequence
+        reference_seq_record = next(SeqIO.parse(reference_seq_file, "fasta"))
+        reference_seq_list = list(reference_seq_record.seq)
+    
+        # Load VCF data into a DataFrame
+        vcf_df = pd.read_csv(phased_vcf_file, sep='\t', comment='#', 
+                             names=["CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT", "SAMPLE_DATA"])
+        
+        # Iterate through VCF DataFrame
+        for index, row in vcf_df.iterrows():
+            pos = int(row['POS']) - 1
+            ref = row['REF']
+            alt = row['ALT'].split(',')[0]  # Consider the first alternate allele
+    
+            if len(ref) == 1 and len(alt) == 1:  # SNP
+                ambiguity_code = iupac_ambiguity.get((ref, alt), alt)
+                reference_seq_list[pos] = ambiguity_code
+                log_print(f"PASS:\tSNP at Position: {pos + 1}, Seq.Nucleotide: {reference_seq_list[pos]} = VCF.Nucleotides: ({ref}, {alt}) => {ambiguity_code}")
+            elif len(ref) != len(alt):  # Indel
+                if len(ref) < len(alt):  # Insertion
+                    insert_seq = alt[len(ref):]
+                    print(f"INSERT: {insert_seq} ({type(insert_seq)})")
+                    insert_seq = insert_seq.lower()
+                    reference_seq_list.insert(pos + 1, insert_seq)
+                    log_print(f"PASS:\tInsertion at Position: {pos + 1}, Inserted Nucleotides: {insert_seq}")
+                else:  # Deletion
+                    for i in range(len(ref) - len(alt)):
+                        print(f"DELETION: {reference_seq_list[pos + len(alt) + i]} ({type(reference_seq_list[pos + len(alt) + i])})")
+                        reference_seq_list[pos + len(alt) + i] = reference_seq_list[pos + len(alt) + i].lower()
+                    log_print(f"PASS:\tDeletion at Position: {pos + 1}, Lowercased Nucleotides: {ref[len(alt):].lower()}")
+            else:
+                log_print(f"ERROR:\tPosition: {row['POS']}, VCF.Nucleotides: ({row['REF']}, {row['ALT']})")
+                
+        # Convert the list back to a string to get the updated sequence
+        updated_reference_sequence = ''.join(reference_seq_list)
+    
+        # Save the new sequence into a new fasta file with the same ID but with "_haplotype_phased"
+        new_record = SeqRecord(Seq(updated_reference_sequence), id=reference_seq_record.id + "_haplotype_phased",
+                               description=f"Haplotype Phased total supporting reads {consensus_seq_count}")
+    
+        # Save the new sequence into a new fasta file
+        with open(phased_fasta_file, 'w') as output_handle:
+            SeqIO.write(new_record, output_handle, 'fasta')
+    
+        log_print(f"PASS:\tSuccessfully generated haplotype phased FASTA file: {phased_fasta_file}")
+    
+        return phased_fasta_file
 
-        if len(ref) == 1 and len(alt) == 1:  # SNP
-            ambiguity_code = iupac_ambiguity.get((ref, alt), alt)
-            reference_seq_list[pos] = ambiguity_code
-            log_print(f"PASS:\tSNP at Position: {pos + 1}, Seq.Nucleotide: {reference_seq_list[pos]} = VCF.Nucleotides: ({ref}, {alt}) => {ambiguity_code}")
-        elif len(ref) != len(alt):  # Indel
-            if len(ref) < len(alt):  # Insertion
-                insert_seq = alt[len(ref):].lower()
-                reference_seq_list.insert(pos + 1, insert_seq)
-                log_print(f"PASS:\tInsertion at Position: {pos + 1}, Inserted Nucleotides: {insert_seq}")
-            else:  # Deletion
-                for i in range(len(ref) - len(alt)):
-                    reference_seq_list[pos + len(alt) + i] = reference_seq_list[pos + len(alt) + i].lower()
-                log_print(f"PASS:\tDeletion at Position: {pos + 1}, Lowercased Nucleotides: {ref[len(alt):].lower()}")
-        else:
-            log_print(f"ERROR:\tPosition: {row['POS']}, VCF.Nucleotides: ({row['REF']}, {row['ALT']})")
-            
-    # Convert the list back to a string to get the updated sequence
-    updated_reference_sequence = ''.join(reference_seq_list)
-
-    # Save the new sequence into a new fasta file with the same ID but with "_haplotype_phased"
-    new_record = SeqRecord(Seq(updated_reference_sequence), id=reference_seq_record.id + "_haplotype_phased",
-                           description=f"Haplotype Phased total supporting reads {consensus_seq_count}")
-
-    # Save the new sequence into a new fasta file
-    with open(phased_fasta_file, 'w') as output_handle:
-        SeqIO.write(new_record, output_handle, 'fasta')
-
-    log_print(f"PASS:\tSuccessfully generated haplotype phased FASTA file: {phased_fasta_file}")
-
-    return phased_fasta_file
+    except Exception as e:
+        log_print(f"ERROR:\tFailed to generate phased FASTA file for sequence ID {seq}. Exception: {str(e)}")
+        return None
 
 def get_single_sequence_length(fasta_file):
     with open(fasta_file, "r") as file:
@@ -375,7 +321,7 @@ def get_sequence_ids_from_fasta(fasta_file):
         sequence_ids.append(record.id)
     return sequence_ids
 
-def phase_consensus_seqs(seq, racon_consensus_file, medaka_consensus_file, ngsid_output_dir, cpu_threads, sanger_sequence_file=None):
+def phase_consensus_seqs(seq, racon_consensus_file, medaka_consensus_file, ngsid_output_dir, CPU_THREADS, sanger_sequence_file=None):
     log_print("Phasing BLAST output...")
     sequence_threshold = 30
     consensus_fastq_file = f"{ngsid_output_dir}/reads_to_consensus_{seq}.fastq"
@@ -400,7 +346,7 @@ def phase_consensus_seqs(seq, racon_consensus_file, medaka_consensus_file, ngsid
         run_subprocess_cmd(["fastqc",
                           consensus_fastq_file,
                           "--threads",
-                          str(cpu_threads),
+                          str(CPU_THREADS),
                           "-o",
                           fastqc_dir],
                            shell_check=False)
@@ -419,7 +365,8 @@ def phase_consensus_seqs(seq, racon_consensus_file, medaka_consensus_file, ngsid
          # Run Minimap2 using sanger sequence if available, if not use medaka consensus as reference fasta
         aligned_sam_file = consensus_fastq_file.replace(".fastq","_aligned.sam")
         reference_seq_file = sanger_sequence_file if os.path.exists(sanger_sequence_file) else medaka_consensus_file
-
+        
+        log_print("Attempting to map {consensus_fastq_file} to reference sequence {reference_seq_file}...")
         run_subprocess_cmd(f"samtools faidx {reference_seq_file}", shell_check=True)
         run_subprocess_cmd(f"minimap2 -ax map-ont {reference_seq_file} {consensus_fastq_file} > {aligned_sam_file}", shell_check=True)
         
@@ -456,7 +403,8 @@ def phase_consensus_seqs(seq, racon_consensus_file, medaka_consensus_file, ngsid
         log_print("ERROR:\tError occurred in processing consensus sequences. Could not combine FASTQ files.")
         return None
 
-def phase_haplotypes(ngsid_output_dir, cpu_threads):
+def phase_haplotypes(ngsid_output_dir, CPU_THREADS):
+    log_print(f"Starting Haplotype Phasing for {ngsid_output_dir}...")
     # Initialize an empty set to store all the extracted numbers
     all_numbers = set()
 
@@ -474,7 +422,8 @@ def phase_haplotypes(ngsid_output_dir, cpu_threads):
 
     # Convert the set to a sorted list if needed
     seq_list = sorted(list(all_numbers))
-
+    log_print(f"Proccessing {seq_list}...")
+    
     for seq in seq_list:
         concatenated_fasta = f"{ngsid_output_dir}/concatentated_reads_{seq}.fasta"
 
@@ -493,6 +442,7 @@ def phase_haplotypes(ngsid_output_dir, cpu_threads):
 
          # Blast Racon consensus against Medaka consensus
         racon_consensus_file = f"{ngsid_output_dir}/racon_cl_id_{seq}/consensus.fasta"
+        
         blast_output_tsv = run_blast(racon_consensus_file, medaka_db_path, add_headers=True)
         blast_output_df = pd.read_csv(blast_output_tsv, sep="\t")
 
@@ -517,22 +467,28 @@ def phase_haplotypes(ngsid_output_dir, cpu_threads):
         racon_seq_len = get_single_sequence_length(racon_consensus_file)
         log_print(f"PASS:\tConsensus Sequence Lenghts: medaka: {medaka_seq_len}, racon: {racon_seq_len}")
         
-        for index, row in blast_output_df.iterrows():
-            log_print(row)
-        
+        # for index, row in blast_output_df.iterrows():
+        #     log_print(row)
         for index, row in blast_output_df.iterrows():
             if row['pident'] < identity_threshold or row['evalue'] > evalue_threshold:
-                phase_fasta_file = phase_consensus_seqs(seq, racon_consensus_file, medaka_consensus_file, ngsid_output_dir, cpu_threads, sanger_sequence_file=sanger_sequence_file)
-                return phase_fasta_file
+                phase_fasta_file = phase_consensus_seqs(seq, racon_consensus_file, medaka_consensus_file, ngsid_output_dir, CPU_THREADS, sanger_sequence_file=sanger_sequence_file)
+                if phase_fasta_file:
+                    log_print(f"PASS:\tPhased FASTA file generated: {phase_fasta_file}")
+                    return phase_fasta_file
+                else:
+                    log_print(f"ERROR:\tFailed to generate phased FASTA file for sequence ID {seq}.")
             else:
                 log_print(f"NOTE:\tNo discernable differences exist between the Medaka and Racon files at the following thresholds: %ID: {identity_threshold}, e-value: {evalue_threshold}")
-                phase_fasta_file = phase_consensus_seqs(seq, racon_consensus_file, medaka_consensus_file, ngsid_output_dir,cpu_threads, sanger_sequence_file=sanger_sequence_file)
-                return phase_fasta_file
-                #return None
-            
+                phase_fasta_file = phase_consensus_seqs(seq, racon_consensus_file, medaka_consensus_file, ngsid_output_dir, CPU_THREADS, sanger_sequence_file=sanger_sequence_file)
+                if phase_fasta_file:
+                    log_print(f"PASS:\tPhased FASTA file generated: {phase_fasta_file}")
+                    return phase_fasta_file            
+                else:
+                    log_print(f"ERROR:\tFailed to generate phased FASTA file for sequence ID {seq}.")
+                    
 if __name__ == "__main__":
     # Set Default values
-    default_ngsid_output_dir = "/mnt/d/FunDiS/combined_NGSID/sample_HS_ONT02_01_41_HAY-F-000397_iNat148667504_Minores"   
+    default_ngsid_output_dir = "/mnt/d/FunDiS/ONT04/combined/sample_HS_ONT04_01_01-HAY-F-003677-iNat155104629-Galerina"
     # default_ngsid_output_dir = "/mnt/d/FunDiS/combined_NGSID/sample_HS_ONT02_01_16_HAY-F-000306_iNat147376929_Xerocomellus"
     # default_ngsid_output_dir = "/mnt/d/FunDiS/combined_NGSID/sample_HS_ONT02_01_15_HAY-F-000312_iNat147376930_Coprinellus"
     default_percent_resources = 0.8
@@ -551,10 +507,7 @@ if __name__ == "__main__":
     NGSID_OUTPUT_DIR = args.input_folder
     PERCENT_RESOURCES = args.percent_resources
 
-    # Get number of total cpu threads available on system and calculate the number to use
-    total_cpu_threads = multiprocessing.cpu_count()
-    # cpu_threads = int(round(total_cpu_threads * PERCENT_RESOURCES, 0))
-    cpu_threads = 10
+    CPU_THREADS, _ = get_resource_values(PERCENT_RESOURCES)
 
     # Phase an NGSID Folder
-    phased_fasta_file = phase_haplotypes(default_ngsid_output_dir, cpu_threads)
+    phased_fasta_file = phase_haplotypes(default_ngsid_output_dir, CPU_THREADS)
