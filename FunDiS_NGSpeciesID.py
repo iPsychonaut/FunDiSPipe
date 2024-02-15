@@ -12,69 +12,17 @@ Protocol Link: https://www.protocols.io/view/primary-data-analysis-basecalling-d
 """
 
 # Base Python Imports
-import subprocess, os
+import os
 
-# Required Python Imports
-from termcolor import cprint
-from datetime import datetime
-
-# Function to color coded print to console and save to log_file information
-def log_print(input_message, log_file=None):
-    """
-    Logs a message to a file and prints it to the console with appropriate coloring.
-    
-    This function takes a message and logs it to the specified file. Additionally, the message is printed to the 
-    console, potentially with specific coloring depending on the context.
-    
-    Parameters:
-        input_message (str): Message to be logged and printed.
-        log_file (str): Path to the log file.
-
-    Notes:
-        - The function uses a global default log file if none is specified.
-        - Timestamps each log entry for easy tracking.
-        - Utilizes color coding in the console to distinguish between different types of messages (e.g., errors, warnings).
-        - Supports color coding for specific message types: NOTE, CMD, ERROR, WARN, and PASS.
-        - Falls back to default (white) color if the message type is unrecognized.
-    """
-    # Access the global variable
-    global DEFAULT_LOG_FILE
-    
-    # Use the default log file if none specified
-    if log_file is None:
-        log_file = DEFAULT_LOG_FILE  
-    
-    # Establish current date-time
-    now = datetime.now()
-    message = f'[{now:%Y-%m-%d %H:%M:%S}]\t{input_message}'
-
-    # Determine the print color based on the input_message content
-    message_type_dict = {'NOTE': ['blue'],
-                         'CMD': ['cyan'],
-                         'ERROR': ['red'],
-                         'WARN': ['yellow'],
-                         'PASS': ['green'],}
-    print_color = ['white']  # Default color
-    for key, value in message_type_dict.items():
-        if key.lower() in input_message.lower():
-            print_color = value
-            break
-
-    # Writing the message to the log file
-    with open(log_file, 'a') as file:
-        print(message, file=file)
-
-    # Handling different message types for colored printing
-    try:
-        cprint(message, print_color[0])
-    except (KeyError, IndexError):
-        cprint(message, print_color[1] if len(print_color) > 1 else 'white')
-
-
+# Custom Pythyon Imports
 from FunDiS_hap_phase import phase_haplotypes
+from FunDiS_Tools import log_print, generate_log_file, initialize_logging_environment, run_subprocess_cmd, get_resource_values
+
+# Global output_area variable
+PERCENT_RESOURCES = 0.75
 
 # Wrapper function to run ngsid_prep in a separate thread
-def run_ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir):
+def run_ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, CPU_THREADS):
     """
     Wrapper function to run NGSpeciesID preparation in a separate thread.
 
@@ -91,19 +39,19 @@ def run_ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length
         ngsid_output_dir (str): Directory path for storing NGSpeciesID output files.
 
     Global Variables:
-        output_area (str): A global variable used for logging output messages.
+        DEFAULT_LOG_FILE (str): A global variable used for logging output messages.
 
     Notes:
         - Captures and logs exceptions during NGSpeciesID preparation.
     """
     global DEFAULT_LOG_FILE
     try:
-        ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir)
+        ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, CPU_THREADS)
     except Exception as e:
         log_print( f"ERROR:\t{str(e)}")
 
 # Function to perform NGSpeciesID preparation
-def ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir):
+def ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, CPU_THREADS):
     """
     Performs NGSpeciesID preparation.
 
@@ -120,14 +68,14 @@ def ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp,
         ngsid_output_dir (str): Directory path for storing NGSpeciesID output files.
 
     Global Variables:
-        output_area (str): A global variable used for logging output messages.
-        cpu_threads (int): Number of CPU threads to be used in processing.
+        DEFAULT_LOG_FILE (str): A global variable used for logging output messages.
+        CPU_THREADS (int): Number of CPU threads to be used in processing.
 
     Notes:
         - Processes each .fastq file in the specified output directory.
         - Logs progress and errors during the preparation process.
     """    
-    global cpu_threads, DEFAULT_LOG_FILE
+    global DEFAULT_LOG_FILE
     # For any .fastq file in the ngsid_output_dir run the NGSID function on it
     fastq_files_list = []
     
@@ -139,16 +87,34 @@ def ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp,
             fastq_files_list.append(os.path.join(ngsid_output_dir, file))
  
     for input_fastq_file in fastq_files_list:
-        ngsid_output_dir = ngsid_fastq(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp)
+        ngsid_output_dir = ngsid_fastq(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, CPU_THREADS)
         if hap_phase_bool == True:
             try:
-                phased_fasta_file = phase_haplotypes(ngsid_output_dir, cpu_threads)
+                phased_fasta_file = phase_haplotypes(ngsid_output_dir, CPU_THREADS)
             except TypeError:
                 log_print( f"Skipping Haplotype Phasing, unable to process: {input_fastq_file} with NGSpeciesID")
                 continue
         log_print(f"PASS:\tSuccessfully processed {ngsid_output_dir}")
 
-def ngsid_fastq(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp):
+def check_racon_consensus_exists(ngsid_output_dir):
+    """
+    Check if each racon output directory contains a 'consensus.fasta' file.
+    
+    Parameters:
+        ngsid_output_dir (str): Directory containing racon output folders.
+    
+    Returns:
+        bool: True if every racon folder has a 'consensus.fasta' file, False otherwise.
+    """
+    racon_folders = [folder for folder in os.listdir(ngsid_output_dir)
+                     if os.path.isdir(os.path.join(ngsid_output_dir, folder)) and 'racon' in folder]
+    for folder in racon_folders:
+        consensus_path = os.path.join(ngsid_output_dir, folder, "consensus.fasta")
+        if not os.path.isfile(consensus_path):
+            return False
+    return True
+
+def ngsid_fastq(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, CPU_THREADS):
     """
     Processes a FASTQ file with NGSpeciesID.
 
@@ -163,8 +129,7 @@ def ngsid_fastq(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp
         max_std_dev_bp (int): Maximum standard deviation in base pairs for NGSpeciesID.
 
     Global Variables:
-        output_area (str): A global variable used for logging output messages.
-        cpu_threads (int): Number of CPU threads to be used in processing.
+        DEFAULT_LOG_FILE (str): A global variable used for logging output messages.
 
     Returns:
         str: The directory path where the NGSpeciesID output is stored.
@@ -173,27 +138,36 @@ def ngsid_fastq(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp
         - Logs the constructed command and the outcome of the process.
         - Handles and logs medaka consensus calls.
     """
-    global cpu_threads, DEFAULT_LOG_FILE
-    log_print( f"Processing {input_fastq_file} with NGSpeciesID...")
-    ngsid_output_dir = input_fastq_file.replace(".fastq","")
+    global DEFAULT_LOG_FILE
+    log_print(f"Processing {input_fastq_file} with NGSpeciesID...")
+    ngsid_output_dir = input_fastq_file.replace(".fastq", "")
     
-    NGSID_cmd = ["NGSpeciesID", "--ont", "--consensus", 
-                   "--sample_size", str(sample_size),
-                   "--m", str(min_length_bp),
-                   "--s", str(max_std_dev_bp),
-                   "--racon", "--racon_iter", str(3),
-                   "--primer_file", ngsid_primers_path,
-                   "--fastq", input_fastq_file,
-                   "--outfolder", ngsid_output_dir]
+    # Start with the default racon iterations
+    racon_iter = 3
     
-    log_print( f"CMD:\t{' '.join(NGSID_cmd)}")
-    process = subprocess.run(NGSID_cmd, text=True)
-    if process.returncode != 0:
-        log_print( f"ERROR:\t{process.stderr}")
-        return None
-    else:
-        log_print( f"PASS:\tSuccessfully processed {input_fastq_file} with NGSpeciesID")
+    while racon_iter > 0:
+        NGSID_cmd = ["NGSpeciesID", "--ont", "--consensus", 
+                     "--sample_size", str(sample_size),
+                     "--m", str(min_length_bp),
+                     "--s", str(max_std_dev_bp),
+                     "--racon", "--racon_iter", str(racon_iter),
+                     "--primer_file", ngsid_primers_path,
+                     "--fastq", input_fastq_file,
+                     "--outfolder", ngsid_output_dir]
         
+        run_subprocess_cmd(NGSID_cmd, False)
+        
+        if check_racon_consensus_exists(ngsid_output_dir):
+            log_print("All racon folders contain a consensus.fasta file.")
+            break  # Exit loop if all consensus files are found
+        else:
+            log_print(f"Missing consensus.fasta files in racon output. Reducing racon iterations to {racon_iter-1}.")
+            racon_iter -= 1  # Reduce racon iterations and retry
+    
+    if racon_iter == 0:
+        log_print("Failed to generate consensus.fasta files with racon polishing.")
+        # Handle the failure case as needed
+    
     racon_folders = [folder for folder in os.listdir(ngsid_output_dir)
                      if os.path.isdir(os.path.join(ngsid_output_dir, folder)) and 'racon' in folder]
     
@@ -206,11 +180,11 @@ def ngsid_fastq(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp
             
         reads_to_consensus_fastq = f"{ngsid_output_dir}/reads_to_consensus_{base_number}.fastq"
         consensus_ref_fasta = f"{ngsid_output_dir}/consensus_reference_{base_number}.fasta"        
-        call_medaka_script(reads_to_consensus_fastq, consensus_ref_fasta, medaka_output_dir)
+        call_medaka_script(reads_to_consensus_fastq, consensus_ref_fasta, medaka_output_dir, CPU_THREADS)
     
     return ngsid_output_dir
 
-def call_medaka_script(reads_to_consensus_fastq, consensus_ref_fasta, medaka_output_dir):
+def call_medaka_script(reads_to_consensus_fastq, consensus_ref_fasta, medaka_output_dir, CPU_THREADS):
     """
     Calls a script to run Medaka on generated consensus reads.
 
@@ -223,30 +197,18 @@ def call_medaka_script(reads_to_consensus_fastq, consensus_ref_fasta, medaka_out
         medaka_output_dir (str): Directory path for storing Medaka output files.
 
     Global Variables:
-        output_area (str): A global variable used for logging output messages.
-        cpu_threads (int): Number of CPU threads to be used in processing.
+        DEFAULT_LOG_FILE (str): A global variable used for logging output messages.
+        CPU_THREADS (int): Number of CPU threads to be used in processing.
 
     Notes:
         - Executes a shell script for running Medaka and handles the subprocess communication.
         - Logs the output and errors from the Medaka script execution.
     """
-    global cpu_threads, DEFAULT_LOG_FILE
+    global DEFAULT_LOG_FILE
     log_print(f"Running medaka on generated consensus reads: {reads_to_consensus_fastq}...")
     medaka_shell_path = "/mnt/d/FunDiS/run_medaka.sh"
-    script_command = [medaka_shell_path, reads_to_consensus_fastq, consensus_ref_fasta, medaka_output_dir, str(cpu_threads)]
+    script_command = ["bash", medaka_shell_path, reads_to_consensus_fastq, consensus_ref_fasta, medaka_output_dir, str(CPU_THREADS)]
+    run_subprocess_cmd(script_command, False)
 
-    process = subprocess.Popen(script_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    stdout, stderr = process.communicate()
-
-    if stdout:
-        log_print("NOTE:\n" + stdout)
-    if stderr:
-        log_print("ERROR:\n" + stderr)
-
-    if process.returncode != 0:
-        log_print("ERROR:\tSubprocess returned with error")
-    else:
-        log_print("PASS:\tSuccessfully ran medaka on generated consensus reads")
-        
 if  __name__ == "__main__":
     print("UNLOGGED DEBUG:\tUNDEVELOPED FunDiS_NGSpeciesID.py DEBUG AREA")
