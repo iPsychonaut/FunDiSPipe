@@ -12,16 +12,16 @@ check_success() {
 # Determine OS Type
 OS_TYPE=$(uname -s 2>/dev/null || echo "This pipeline was not built for Windows, please use WSL")
 
-# Checking and Updating Conda
-echo -e "\e[36mChecking for Conda...\e[0m"
-if ! command -v conda &> /dev/null; then
-    echo -e "\e[31mConda is not installed. Please install Conda before running this script.\e[0m"
-    exit 1
-else
-    echo -e "\e[36mUpdating Conda...\e[0m"
-    conda update -n base -c defaults conda -y
-    check_success "Conda update"
-fi
+## Checking and Updating Conda
+#echo -e "\e[36mChecking for Conda...\e[0m"
+#if ! command -v conda &> /dev/null; then
+#    echo -e "\e[31mConda is not installed. Please install Conda before running this script.\e[0m"
+#    exit 1
+#else
+#    echo -e "\e[36mUpdating Conda...\e[0m"
+#    conda update -n base -c defaults conda -y
+#    check_success "Conda update"
+#fi
 
 # Checking for Mamba
 echo -e "\e[36mChecking for Mamba...\e[0m"
