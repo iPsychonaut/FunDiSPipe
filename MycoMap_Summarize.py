@@ -11,7 +11,7 @@ Can be run on it's own using the following command:
     -c, --min_cutoff (int): Minimum number of Reads in Consensus (RiC) allowed for processing for MycoMap.
     -p, --haplotype_phase (bool): True/False of whether or not Haplotype Phasing data should be processed.
 
-This is the MycoMap Summarizer (summarize.py) developed for a modified protocol by
+This is a refactored MycoMap Summarizer (summarize.py) developed for a modified protocol by
 
 Stephen Douglas Russell and paid for by the Fungal Diversity Survey (FunDiS).
 
@@ -24,7 +24,7 @@ from pathlib import Path
 from Bio import SeqIO
 
 # Custom Python Imports
-from FunDiS_Tools import log_print, generate_log_file, initialize_logging_environment, run_subprocess_cmd
+from FunDiS_Tools import log_print, generate_log_file, initialize_logging_environment, run_subprocess_cmd, find_file
 
 # Global output_area variable
 PERCENT_RESOURCES = 0.75
@@ -447,13 +447,16 @@ if __name__ == "__main__":
     """
     Main argument if run directly from command line, parses inputs as arguments as well.
     """
+    # Set up Argument Parser
     args = parse_arguments()
 
+    # Parse input Arguments
     INPUT_FOLDER = args.input_folder
     SUMMARY_RIC_CUTOFF = args.min_cutoff
     HAPLOTYPE_PHASE = args.haplotype_phase
 
     # Generate log file with the desired behavior
     initialize_logging_environment(INPUT_FOLDER)
-       
+      
+    # Run solo MycoMap summary preparation
     run_summary_prep(INPUT_FOLDER, "40", True)
