@@ -6,9 +6,6 @@ source ~/mambaforge/etc/profile.d/conda.sh
 # Activate the medaka conda environment
 conda activate medaka
 
-# Set the memory allocation for samtools sort (e.g., 4G per thread)
-export SAMTOOLS_SORT_MEMORY=4G
-
 # Define your variables
 reads_to_consensus_fastq="$1"
 consensus_ref_fasta="$2"
