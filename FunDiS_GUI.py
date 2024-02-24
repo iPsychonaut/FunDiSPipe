@@ -22,7 +22,7 @@ Current Assumptions:
 """
 
 # Base Python Imports
-import os, multiprocessing, math
+import os
 
 # Required Python Imports
 import tkinter as tk
@@ -32,7 +32,7 @@ from tkinter import filedialog, PhotoImage, messagebox
 from MycoMap_Summarize import run_summary_prep
 from FunDiS_NGSpeciesID import run_ngsid_prep
 from FunDiS_Minbar import run_minibar_prep
-from FunDiS_Tools import log_print, generate_log_file, initialize_logging_environment, run_subprocess_cmd, get_resource_values
+from FunDiS_Tools import log_print, initialize_logging_environment, get_resource_values, find_file
 
 # Global output_area variable
 CPU_THREADS = 1
@@ -63,9 +63,10 @@ def gui_minibar_prep():
     minibar_fastq_gz_path= minibar_file_path_entry.get()
 
     # Populate this dictionary with entries from the main menu
-    chopper_command_dict = {"-q": str(minibar_percent_match_entry.get()),
-                            "--maxlength": str(minibar_barcode_edit_dist_entry.get()),
-                            "--minlength": str(minibar_primer_edit_dist_entry.get())}
+    chopper_command_dict = {"-q": str(chopper_read_quality_entry.get()),
+                            "--maxlength": str(chopper_max_length_entry.get()),
+                            "--minlength": str(chopper_min_length_entry.get()),
+                            "--threads": str(CPU_THREADS)}
 
     # Populate this dictionary with entries from the main menu
     minibar_command_dict = {"-p": str(minibar_percent_match_entry.get()),
@@ -77,8 +78,10 @@ def gui_minibar_prep():
         pass
     else:
         log_print( "MiniBar preparation started...\n")
-        ngsid_output_dir = minibar_fastq_gz_path.replace(".fastq.gz","")
-        minibar_path = "/mnt/d/FunDiS/minibar.py"
+        ngsid_output_dir = minibar_fastq_gz_path.replace(".gz","").replace(".fastq","")
+        
+        minibar_path = find_file("minibar.py")
+       
         minibar_index_path = f"{os.path.dirname(minibar_fastq_gz_path)}/Index.txt"
         
         run_minibar_prep(minibar_path, minibar_index_path, minibar_fastq_gz_path, ngsid_output_dir, chopper_command_dict, minibar_command_dict)
@@ -109,12 +112,13 @@ def gui_ngsid_prep():
         min_length_bp = min_length_bp_entry.get()
         max_std_dev_bp = max_std_dev_bp_entry.get()
         hap_phase_bool = hap_phase_var.get()
+        summary_ric_cutoff = summary_ric_cutoff_entry.get()
         
         input_fastq_file = minibar_file_path_entry.get().replace(".gz", "")
         ngsid_output_dir = ngsid_folder_path.replace(".fastq.gz", "")
         ngsid_primers_path = f"{os.path.dirname(ngsid_folder_path)}/primers.txt"
         
-        run_ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, CPU_THREADS)
+        run_ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, summary_ric_cutoff, CPU_THREADS)
 
 # GUI function to trigger NGSpeciesID preparation  
 def gui_summary_prep():
@@ -131,6 +135,7 @@ def gui_summary_prep():
         - Initiates the summary preparation in a separate thread to avoid blocking the GUI.
     """
     summary_folder_path = summary_folder_path_entry.get()
+    summary_ric_cutoff = summary_ric_cutoff_entry.get()
     if input_check(summary_folder_path) == False:
         pass
     else:
@@ -138,8 +143,10 @@ def gui_summary_prep():
         
         hap_phase_bool = hap_phase_var.get()
         summary_output_dir = minibar_file_path_entry.get().replace(".fastq.gz", "")
+        if summary_output_dir == "":
+            summary_output_dir = summary_folder_path_entry.get()
         
-        run_summary_prep(summary_output_dir, hap_phase_bool)
+        run_summary_prep(summary_output_dir, summary_ric_cutoff, hap_phase_bool)
 
 def choose_file_or_folder(file_path_entry):
     """
@@ -172,7 +179,7 @@ def choose_file_or_folder(file_path_entry):
 
 def choose_minibar_file():
     """
-    Opens a file dialog for selecting a .fastq.gz file for minibar and updates related fields.
+    Opens a file dialog for selecting a .fastq.gz or .fastq file for minibar and updates related fields.
     """
     filename = filedialog.askopenfilename(initialdir="/", title="Select .fastq.gz file", filetypes=(("gzip files", "*.gz"), ("all files", "*.*")))
     minibar_file_path_entry.delete(0, tk.END)
@@ -254,9 +261,8 @@ CPU_THREADS, _ = get_resource_values(PERCENT_RESOURCES)
 root = tk.Tk()
 root.title("FunDiS Nanopore Barcoding Pipeline")
 
-# Set the window icon
-icon_image = PhotoImage(file="./fundis_icon.png")
-root.iconphoto(False, icon_image)
+# TODO: Fix Set the window icon using an absolute path
+# root.iconbitmap("fundis_icon.ico")
 
 # Initialize your Entry variables with default values in the main script body (not in a function)
 sample_size_entry = tk.Entry(root, width=50)
@@ -411,6 +417,12 @@ summary_folder_path_entry.pack()
 # File Browser Button for Summarize folder input
 file_browse_button = tk.Button(main_frame, text="Browse", command=lambda: choose_file_or_folder(summary_folder_path_entry))
 file_browse_button.pack()
+
+summary_ric_cutoff_label = tk.Label(main_frame, text="Summarize Min Reads in Consensus (RiC):")
+summary_ric_cutoff_label.pack()
+summary_ric_cutoff_entry = tk.Entry(main_frame, width=50)
+summary_ric_cutoff_entry.insert(0, "40")
+summary_ric_cutoff_entry.pack()
 
 # Summary Button
 summary_prep_button = tk.Button(main_frame, text="Run MycoMap Summary", command = gui_summary_prep)
