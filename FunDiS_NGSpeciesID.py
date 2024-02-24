@@ -16,13 +16,13 @@ import os
 
 # Custom Pythyon Imports
 from FunDiS_hap_phase import phase_haplotypes
-from FunDiS_Tools import log_print, generate_log_file, initialize_logging_environment, run_subprocess_cmd, get_resource_values
+from FunDiS_Tools import log_print, run_subprocess_cmd
 
 # Global output_area variable
 PERCENT_RESOURCES = 0.75
 
 # Wrapper function to run ngsid_prep in a separate thread
-def run_ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, CPU_THREADS):
+def run_ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, summary_ric_cutoff, CPU_THREADS):
     """
     Wrapper function to run NGSpeciesID preparation in a separate thread.
 
@@ -37,6 +37,7 @@ def run_ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length
         max_std_dev_bp (int): Maximum standard deviation in base pairs for NGSpeciesID.
         hap_phase_bool (bool): Boolean to indicate if haplotype phasing is to be performed.
         ngsid_output_dir (str): Directory path for storing NGSpeciesID output files.
+        summary_ric_cutoff (int): Minimum Reads in Consensus (RiC) allowed for processing
 
     Global Variables:
         DEFAULT_LOG_FILE (str): A global variable used for logging output messages.
@@ -46,12 +47,12 @@ def run_ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length
     """
     global DEFAULT_LOG_FILE
     try:
-        ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, CPU_THREADS)
+        ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, summary_ric_cutoff, CPU_THREADS)
     except Exception as e:
         log_print( f"ERROR:\t{str(e)}")
 
 # Function to perform NGSpeciesID preparation
-def ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, CPU_THREADS):
+def ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, summary_ric_cutoff, CPU_THREADS):
     """
     Performs NGSpeciesID preparation.
 
@@ -66,6 +67,7 @@ def ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp,
         max_std_dev_bp (int): Maximum standard deviation in base pairs for NGSpeciesID.
         hap_phase_bool (bool): Boolean to indicate if haplotype phasing is to be performed.
         ngsid_output_dir (str): Directory path for storing NGSpeciesID output files.
+        summary_ric_cutoff (int): Minimum Reads in Consensus (RiC) allowed for processing
 
     Global Variables:
         DEFAULT_LOG_FILE (str): A global variable used for logging output messages.
@@ -90,7 +92,7 @@ def ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp,
         ngsid_output_dir = ngsid_fastq(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, CPU_THREADS)
         if hap_phase_bool == True:
             try:
-                phased_fasta_file = phase_haplotypes(ngsid_output_dir, CPU_THREADS)
+                phased_fasta_file = phase_haplotypes(ngsid_output_dir, summary_ric_cutoff, CPU_THREADS)
             except TypeError:
                 log_print( f"Skipping Haplotype Phasing, unable to process: {input_fastq_file} with NGSpeciesID")
                 continue
