@@ -12,7 +12,7 @@ Protocol Link: https://www.protocols.io/view/primary-data-analysis-basecalling-d
 """
 
 # Base Python Imports
-import os, re, subprocess, multiprocessing, argparse
+import os, re, subprocess, argparse
 
 # Required Python Imports
 import pandas as pd
@@ -23,13 +23,31 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 
 # Custom Python Imports
-from FunDiS_Tools import log_print, generate_log_file, initialize_logging_environment, run_subprocess_cmd, get_resource_values
+from FunDiS_Tools import log_print, run_subprocess_cmd, get_resource_values
 
 # Global output_area variable
 CPU_THREADS = 1
 PERCENT_RESOURCES = 0.75
 
 def run_blast(query_file, db_file, add_headers=True):
+    """
+    DESCRIPTION.
+
+    Parameters
+    ----------
+    query_file : TYPE
+        DESCRIPTION.
+    db_file : TYPE
+        DESCRIPTION.
+    add_headers : TYPE, optional
+        DESCRIPTION. The default is True.
+
+    Returns
+    -------
+    blast_output : TYPE
+        DESCRIPTION.
+
+    """
     log_print("BLASTING query against database...")
     blast_output = query_file.replace('.fasta', '_blast_results.tsv')
     blastn_cline = NcbiblastnCommandline(query=query_file, db=db_file, evalue=0.001, outfmt=6, out=blast_output)
@@ -45,6 +63,21 @@ def run_blast(query_file, db_file, add_headers=True):
     return blast_output
 
 def append_sequence_to_fasta(source_fasta, destination_fasta):
+    """
+    DESCRIPTION.
+
+    Parameters
+    ----------
+    source_fasta : TYPE
+        DESCRIPTION.
+    destination_fasta : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    """
     with open(source_fasta, 'r') as source_file:
         source_content = source_file.read()
 
@@ -53,6 +86,25 @@ def append_sequence_to_fasta(source_fasta, destination_fasta):
         dest_file.write("\n")  # Add a newline for separation
 
 def find_latest_paf_file(directory):
+    """
+    DESCRIPTION.
+
+    Parameters
+    ----------
+    directory : TYPE
+        DESCRIPTION.
+
+    Raises
+    ------
+    ValueError
+        DESCRIPTION.
+
+    Returns
+    -------
+    TYPE
+        DESCRIPTION.
+
+    """
     log_print("Searching for the latest PAF file...")
     paf_files = [f for f in os.listdir(directory) if re.match(r'read_alignments_it_\d+\.paf', f)]
     if not paf_files:
@@ -69,6 +121,22 @@ def find_latest_paf_file(directory):
     return os.path.join(directory, latest_paf_file)
 
 def check_and_add_rg_to_bam(bam_file, reference_seq_ids):
+    """
+    DESCRIPTION.
+
+    Parameters
+    ----------
+    bam_file : TYPE
+        DESCRIPTION.
+    reference_seq_ids : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    TYPE
+        DESCRIPTION.
+
+    """
     modified_bam_file = bam_file.replace(".bam", "_rg_added.bam")
     existing_rgs = set()
     samtools_view_cmd = f"samtools view -H {bam_file}"
@@ -100,6 +168,24 @@ def check_and_add_rg_to_bam(bam_file, reference_seq_ids):
     return modified_bam_file
 
 def extract_read_names_from_paf(paf_file, min_matching_bases=10, max_divergence=0.01):
+    """
+    DESCRIPTION.
+
+    Parameters
+    ----------
+    paf_file : TYPE
+        DESCRIPTION.
+    min_matching_bases : TYPE, optional
+        DESCRIPTION. The default is 10.
+    max_divergence : TYPE, optional
+        DESCRIPTION. The default is 0.01.
+
+    Returns
+    -------
+    read_names : TYPE
+        DESCRIPTION.
+
+    """
     log_print(f"Extracting read names from PAF file: {paf_file}...")
     read_names = set()
     with open(paf_file, 'r') as file:
@@ -131,6 +217,22 @@ def extract_read_names_from_paf(paf_file, min_matching_bases=10, max_divergence=
     return read_names
 
 def extract_sequences_from_fastq(fastq_file, read_names):
+    """
+    DESCRIPTION.
+
+    Parameters
+    ----------
+    fastq_file : TYPE
+        DESCRIPTION.
+    read_names : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    sequences : TYPE
+        DESCRIPTION.
+
+    """
     log_print(f"Number of read IDs provided: {len(read_names)}...")
     sequences = []
     not_found_ids = []
@@ -151,6 +253,22 @@ def extract_sequences_from_fastq(fastq_file, read_names):
     return sequences
 
 def determine_medaka_consensus_seqs(fastq_file, seq):
+    """
+    DESCRIPTION.
+
+    Parameters
+    ----------
+    fastq_file : TYPE
+        DESCRIPTION.
+    seq : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    output_file : TYPE
+        DESCRIPTION.
+
+    """
     log_print("Determinine sequences used to generate medaka consensus...")
     directory = f"{fastq_file.split('reads')[0]}/medaka_cl_id_{seq}"
     output_file = fastq_file.replace(".fastq","_medaka_filtered.fastq") 
@@ -195,6 +313,22 @@ def determine_medaka_consensus_seqs(fastq_file, seq):
     return output_file
 
 def determine_racon_consensus_seqs(fastq_file, seq):
+    """
+    DESCRIPTION.
+
+    Parameters
+    ----------
+    fastq_file : TYPE
+        DESCRIPTION.
+    seq : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    output_file : TYPE
+        DESCRIPTION.
+
+    """
     log_print("Determinine sequences used to generate racon consensus...")
     directory = f"{fastq_file.split('reads')[0]}/racon_cl_id_{seq}"
     output_file = fastq_file.replace(".fastq", "_racon_filtered.fastq")
@@ -226,6 +360,23 @@ def determine_racon_consensus_seqs(fastq_file, seq):
         return None
 
 def combine_fastq_files(racon_fastq, medaka_fastq, output_fastq):
+    """
+    DESCRIPTION.
+
+    Parameters
+    ----------
+    racon_fastq : TYPE
+        DESCRIPTION.
+    medaka_fastq : TYPE
+        DESCRIPTION.
+    output_fastq : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    """
     log_print("Combining racon and medaka consensus sequences into a single FASTQ file without duplicates...")
     combined_sequences = {}
 
@@ -247,6 +398,26 @@ def combine_fastq_files(racon_fastq, medaka_fastq, output_fastq):
     log_print(f"PASS:\tCombined FASTQ file written to {output_fastq}")
 
 def create_phased_fasta(reference_seq_file, phased_vcf_file, seq, consensus_seq_count):
+    """
+    DESCRIPTION.
+
+    Parameters
+    ----------
+    reference_seq_file : TYPE
+        DESCRIPTION.
+    phased_vcf_file : TYPE
+        DESCRIPTION.
+    seq : TYPE
+        DESCRIPTION.
+    consensus_seq_count : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    phased_fasta_file : TYPE
+        DESCRIPTION.
+
+    """
     try:
         log_print("Generating phased FASTA file from phased VCF data...")
         phased_fasta_file = phased_vcf_file.replace(".vcf", ".fasta")
@@ -310,20 +481,73 @@ def create_phased_fasta(reference_seq_file, phased_vcf_file, seq, consensus_seq_
         return None
 
 def get_single_sequence_length(fasta_file):
+    """
+    DESCRIPTION.
+
+    Parameters
+    ----------
+    fasta_file : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    TYPE
+        DESCRIPTION.
+
+    """
     with open(fasta_file, "r") as file:
         for record in SeqIO.parse(file, "fasta"):
             return len(record.seq)
     return None  # In case the FASTA file is empty or not properly formatted
 
 def get_sequence_ids_from_fasta(fasta_file):
+    """
+    DESCRIPTION.
+
+    Parameters
+    ----------
+    fasta_file : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    sequence_ids : TYPE
+        DESCRIPTION.
+
+    """
     sequence_ids = []
     for record in SeqIO.parse(fasta_file, "fasta"):
         sequence_ids.append(record.id)
     return sequence_ids
 
-def phase_consensus_seqs(seq, racon_consensus_file, medaka_consensus_file, ngsid_output_dir, CPU_THREADS, sanger_sequence_file=None):
+def phase_consensus_seqs(seq, racon_consensus_file, medaka_consensus_file, ngsid_output_dir, summary_ric_cutoff, CPU_THREADS, sanger_sequence_file=None):
+    """
+    
+
+    Parameters
+    ----------
+    seq : TYPE
+        DESCRIPTION.
+    racon_consensus_file : TYPE
+        DESCRIPTION.
+    medaka_consensus_file : TYPE
+        DESCRIPTION.
+    ngsid_output_dir : TYPE
+        DESCRIPTION.
+    summary_ric_cutoff : TYPE
+        DESCRIPTION.
+    CPU_THREADS : TYPE
+        DESCRIPTION.
+    sanger_sequence_file : TYPE, optional
+        DESCRIPTION. The default is None.
+
+    Returns
+    -------
+    phased_fasta_file : TYPE
+        DESCRIPTION.
+
+    """
     log_print("Phasing BLAST output...")
-    sequence_threshold = 30
     consensus_fastq_file = f"{ngsid_output_dir}/reads_to_consensus_{seq}.fastq"
     racon_consensus_seqs_fastq = determine_racon_consensus_seqs(consensus_fastq_file, seq)
     medaka_consensus_seqs_fastq = determine_medaka_consensus_seqs(consensus_fastq_file, seq)
@@ -338,7 +562,7 @@ def phase_consensus_seqs(seq, racon_consensus_file, medaka_consensus_file, ngsid
         for record in SeqIO.parse(consensus_fastq_file, "fastq"):
             consensus_seq_count += 1
         
-        if consensus_seq_count < sequence_threshold:
+        if consensus_seq_count < summary_ric_cutoff:
             log_print(f"NOTE:\tConsensus sequence count did not meet required threshold of 40 unique sequences: {consensus_seq_count}")
             return None
         
@@ -403,7 +627,25 @@ def phase_consensus_seqs(seq, racon_consensus_file, medaka_consensus_file, ngsid
         log_print("ERROR:\tError occurred in processing consensus sequences. Could not combine FASTQ files.")
         return None
 
-def phase_haplotypes(ngsid_output_dir, CPU_THREADS):
+def phase_haplotypes(ngsid_output_dir, summary_ric_cutoff, CPU_THREADS):
+    """
+    DESCRIPTION.
+    
+    Parameters
+    ----------
+    ngsid_output_dir : TYPE
+        DESCRIPTION.
+    summary_ric_cutoff : TYPE
+        DESCRIPTION.
+    CPU_THREADS : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    phase_fasta_file : TYPE
+        DESCRIPTION.
+
+    """
     log_print(f"Starting Haplotype Phasing for {ngsid_output_dir}...")
     # Initialize an empty set to store all the extracted numbers
     all_numbers = set()
@@ -471,7 +713,7 @@ def phase_haplotypes(ngsid_output_dir, CPU_THREADS):
         #     log_print(row)
         for index, row in blast_output_df.iterrows():
             if row['pident'] < identity_threshold or row['evalue'] > evalue_threshold:
-                phase_fasta_file = phase_consensus_seqs(seq, racon_consensus_file, medaka_consensus_file, ngsid_output_dir, CPU_THREADS, sanger_sequence_file=sanger_sequence_file)
+                phase_fasta_file = phase_consensus_seqs(seq, racon_consensus_file, medaka_consensus_file, ngsid_output_dir, summary_ric_cutoff, CPU_THREADS, sanger_sequence_file=sanger_sequence_file)
                 if phase_fasta_file:
                     log_print(f"PASS:\tPhased FASTA file generated: {phase_fasta_file}")
                     return phase_fasta_file
@@ -479,7 +721,7 @@ def phase_haplotypes(ngsid_output_dir, CPU_THREADS):
                     log_print(f"ERROR:\tFailed to generate phased FASTA file for sequence ID {seq}.")
             else:
                 log_print(f"NOTE:\tNo discernable differences exist between the Medaka and Racon files at the following thresholds: %ID: {identity_threshold}, e-value: {evalue_threshold}")
-                phase_fasta_file = phase_consensus_seqs(seq, racon_consensus_file, medaka_consensus_file, ngsid_output_dir, CPU_THREADS, sanger_sequence_file=sanger_sequence_file)
+                phase_fasta_file = phase_consensus_seqs(seq, racon_consensus_file, medaka_consensus_file, ngsid_output_dir, summary_ric_cutoff, CPU_THREADS, sanger_sequence_file=sanger_sequence_file)
                 if phase_fasta_file:
                     log_print(f"PASS:\tPhased FASTA file generated: {phase_fasta_file}")
                     return phase_fasta_file            
@@ -491,6 +733,7 @@ if __name__ == "__main__":
     default_ngsid_output_dir = "/mnt/d/FunDiS/ONT04/combined/sample_HS_ONT04_01_01-HAY-F-003677-iNat155104629-Galerina"
     # default_ngsid_output_dir = "/mnt/d/FunDiS/combined_NGSID/sample_HS_ONT02_01_16_HAY-F-000306_iNat147376929_Xerocomellus"
     # default_ngsid_output_dir = "/mnt/d/FunDiS/combined_NGSID/sample_HS_ONT02_01_15_HAY-F-000312_iNat147376930_Coprinellus"
+    default_summary_ric_cutoff = 9
     default_percent_resources = 0.8
     
     # Set up argument parsing
@@ -498,6 +741,9 @@ if __name__ == "__main__":
     parser.add_argument("--input_folder", "-i",
                         type=str, default=default_ngsid_output_dir,
                         help="Path to the NGSPeciesID folder to parse.")
+    parser.add_argument("--ric_cutoff", "-ric",
+                        type=int, default=default_summary_ric_cutoff,
+                        help="Minimum Reads in Consensus (RiC) allowed for processing.")
     parser.add_argument("--percent_resources", "-pr",
                         type=float, default=default_percent_resources,
                         help="Percentage of CPU resources to use.")
@@ -505,9 +751,9 @@ if __name__ == "__main__":
     # Parse arguments
     args = parser.parse_args()
     NGSID_OUTPUT_DIR = args.input_folder
+    RIC_CUTOFF = args.ric_cutoff
     PERCENT_RESOURCES = args.percent_resources
-
     CPU_THREADS, _ = get_resource_values(PERCENT_RESOURCES)
 
     # Phase an NGSID Folder
-    phased_fasta_file = phase_haplotypes(default_ngsid_output_dir, CPU_THREADS)
+    phased_fasta_file = phase_haplotypes(NGSID_OUTPUT_DIR, RIC_CUTOFF, CPU_THREADS)
