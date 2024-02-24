@@ -35,6 +35,8 @@ Note: Running fundis_setup.sh attempts to provide the setup to install all pytho
 
 ## Installation
 
+Note: BEFORE RUNNING ENSURE YOU HAVE A CURRENT VERSION OF CONDA INSTALLED: https://www.anaconda.com/download/
+
 To install FunDiSPipe, follow these steps after cloning the GitHub repository:
 ```bash
 bash ./fundis_setup.sh
