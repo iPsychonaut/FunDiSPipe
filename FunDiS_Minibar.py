@@ -90,27 +90,30 @@ def minibar_prep(minibar_path, minibar_index_path, input_file_path, ngsid_output
     main_dir = os.getcwd()
     log_print(f"Prepping {input_file_path} for NGSpeciesID with minibar...")
 
+    # Ensure the output directory exists
+    ngsid_output_dir = ngsid_output_dir.replace(".gz","").replace(".fastq","")
+    if not os.path.exists(ngsid_output_dir):
+        os.makedirs(ngsid_output_dir)
+    os.chdir(ngsid_output_dir)
+
     # Determine if the file is compressed (.gz) and set the correct chopper command
     if input_file_path.endswith(".gz"):
         log_print(f"File is compressed: {input_file_path}")
         chopper_input_cmd = f"gunzip -c {input_file_path}"
-        uncompressed_fastq_path = input_file_path.replace(".gz","")  # Remove .gz extension
+        # Construct the chopper command to write output to a temporary file
+        with tempfile.NamedTemporaryFile(delete=False, mode='w+', dir=ngsid_output_dir, suffix=".fastq") as temp_fastq:
+            chopper_cmd_str = f"{chopper_input_cmd} | chopper -q {chopper_command_dict['-q']} -l {chopper_command_dict['--minlength']} --maxlength {chopper_command_dict['--maxlength']} --threads {chopper_command_dict['--threads']} > {temp_fastq.name}"
+            run_subprocess_cmd(chopper_cmd_str, shell_check=True)
+            temp_fastq_path = temp_fastq.name
     else:
         log_print(f"File is uncompressed: {input_file_path}")
         chopper_input_cmd = f"cat {input_file_path}"
-        uncompressed_fastq_path = input_file_path
+        # Construct the chopper command to write output to a temporary file
+        with tempfile.NamedTemporaryFile(delete=False, mode='w+', dir=ngsid_output_dir, suffix=".fastq") as temp_fastq:
+            chopper_cmd_str = f"{chopper_input_cmd} | chopper -q {chopper_command_dict['-q']} -l {chopper_command_dict['--minlength']} --maxlength {chopper_command_dict['--maxlength']} --threads {chopper_command_dict['--threads']} > {temp_fastq.name}"
+            run_subprocess_cmd(chopper_cmd_str, shell_check=True)
+            temp_fastq_path = temp_fastq.name
 
-    # Ensure the output directory exists
-    if not os.path.exists(ngsid_output_dir):
-        os.makedirs(ngsid_output_dir)
-    os.chdir(ngsid_output_dir)
-       
-    # Construct the chopper command to write output to a temporary file
-    with tempfile.NamedTemporaryFile(delete=False, mode='w+', dir=ngsid_output_dir, suffix=".fastq") as temp_fastq:
-        chopper_cmd_str = f"{chopper_input_cmd} | chopper -q {chopper_command_dict['-q']} -l {chopper_command_dict['--minlength']} --maxlength {chopper_command_dict['--maxlength']} --threads {chopper_command_dict['--threads']} > {temp_fastq.name}"
-        run_subprocess_cmd(chopper_cmd_str, shell_check=True)
-        temp_fastq_path = temp_fastq.name
-    
     # Construct minibar command using the temporary file as input
     minibar_cmd_str = f"{minibar_path} -F {minibar_index_path} {temp_fastq_path}"
     for key, value in minibar_command_dict.items():
