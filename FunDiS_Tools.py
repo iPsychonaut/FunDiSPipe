@@ -267,3 +267,43 @@ def get_resource_values(PERCENT_RESOURCES):
     ram_gb = int(mem_info.total / (1024.0 ** 3) * PERCENT_RESOURCES)
     
     return cpu_threads, ram_gb 
+
+def find_file(filename):
+    """
+    Searches for a file within the current working directory.
+
+    Parameters:
+        filename (str): The name of the file to search for.
+
+    Returns:
+        str: The path to the first instance of the file, if found.
+        None: If the file is not found.
+        
+    Notes:
+        - Useful for setups where the exact location of a file might vary.
+    
+    Considerations:
+        - This function might take a long time in large file systems.
+    
+    Examples:
+        file_path = find_file("config.json")
+        if file_path:
+            print(f"Found config at {file_path}")
+        else:
+            print("Config file not found")
+    """
+    global ENVIRONMENT_TYPE
+    
+    log_print(f"Looking for {filename}")
+    
+    if ENVIRONMENT_TYPE == "WIN":
+        root_directory = 'C:\\'  # Adjust if necessary for different drives
+    elif ENVIRONMENT_TYPE in ["LINUX/WSL/MAC"]:
+        root_directory = '/'
+    else:
+        raise ValueError("Unknown ENVIRONMENT_TYPE")
+
+    for root, dirs, files in os.walk(root_directory):
+        if filename in files:
+            return os.path.join(root, filename)
+    return None
