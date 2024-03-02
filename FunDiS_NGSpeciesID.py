@@ -16,13 +16,13 @@ import os
 
 # Custom Pythyon Imports
 from FunDiS_hap_phase import phase_haplotypes
-from FunDiS_Tools import log_print, run_subprocess_cmd
+from FunDiS_Tools import log_print, run_subprocess_cmd, find_file
 
 # Global output_area variable
 PERCENT_RESOURCES = 0.75
 
 # Wrapper function to run ngsid_prep in a separate thread
-def run_ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, summary_ric_cutoff, CPU_THREADS):
+def run_ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, summary_ric_cutoff, medaka_shell_path, CPU_THREADS):
     """
     Wrapper function to run NGSpeciesID preparation in a separate thread.
 
@@ -47,12 +47,12 @@ def run_ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length
     """
     global DEFAULT_LOG_FILE
     try:
-        ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, summary_ric_cutoff, CPU_THREADS)
+        ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, summary_ric_cutoff, medaka_shell_path, CPU_THREADS)
     except Exception as e:
         log_print( f"ERROR:\t{str(e)}")
 
 # Function to perform NGSpeciesID preparation
-def ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, summary_ric_cutoff, CPU_THREADS):
+def ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, summary_ric_cutoff, medaka_shell_path, CPU_THREADS):
     """
     Performs NGSpeciesID preparation.
 
@@ -89,7 +89,7 @@ def ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp,
             fastq_files_list.append(os.path.join(ngsid_output_dir, file))
  
     for input_fastq_file in fastq_files_list:
-        ngsid_output_dir = ngsid_fastq(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, CPU_THREADS)
+        ngsid_output_dir = ngsid_fastq(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, medaka_shell_path, CPU_THREADS)
         if hap_phase_bool == True:
             try:
                 phased_fasta_file = phase_haplotypes(ngsid_output_dir, summary_ric_cutoff, CPU_THREADS)
@@ -116,7 +116,7 @@ def check_racon_consensus_exists(ngsid_output_dir):
             return False
     return True
 
-def ngsid_fastq(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, CPU_THREADS):
+def ngsid_fastq(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, medaka_shell_path, CPU_THREADS):
     """
     Processes a FASTQ file with NGSpeciesID.
 
@@ -182,11 +182,11 @@ def ngsid_fastq(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp
             
         reads_to_consensus_fastq = f"{ngsid_output_dir}/reads_to_consensus_{base_number}.fastq"
         consensus_ref_fasta = f"{ngsid_output_dir}/consensus_reference_{base_number}.fasta"        
-        call_medaka_script(reads_to_consensus_fastq, consensus_ref_fasta, medaka_output_dir, CPU_THREADS)
+        call_medaka_script(reads_to_consensus_fastq, consensus_ref_fasta, medaka_output_dir, medaka_shell_path, CPU_THREADS)
     
     return ngsid_output_dir
 
-def call_medaka_script(reads_to_consensus_fastq, consensus_ref_fasta, medaka_output_dir, CPU_THREADS):
+def call_medaka_script(reads_to_consensus_fastq, consensus_ref_fasta, medaka_output_dir, medaka_shell_path, CPU_THREADS):
     """
     Calls a script to run Medaka on generated consensus reads.
 
@@ -206,9 +206,9 @@ def call_medaka_script(reads_to_consensus_fastq, consensus_ref_fasta, medaka_out
         - Executes a shell script for running Medaka and handles the subprocess communication.
         - Logs the output and errors from the Medaka script execution.
     """
-    global DEFAULT_LOG_FILE
+    global DEFAULT_LOG_FILE, ENVIRONMENT_TYPE
     log_print(f"Running medaka on generated consensus reads: {reads_to_consensus_fastq}...")
-    medaka_shell_path = "/mnt/d/FunDiS/run_medaka.sh"
+    
     script_command = ["bash", medaka_shell_path, reads_to_consensus_fastq, consensus_ref_fasta, medaka_output_dir, str(CPU_THREADS)]
     run_subprocess_cmd(script_command, False)
 
