@@ -10,7 +10,7 @@ else
 fi
 
 # Activate the medaka conda environment
-conda init medaka
+conda init bash
 conda activate medaka
 
 # Define your variables
