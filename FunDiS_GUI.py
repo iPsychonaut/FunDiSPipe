@@ -78,6 +78,12 @@ def gui_minibar_prep():
         pass
     else:
         log_print( "MiniBar preparation started...\n")
+        
+        if LOGGING_ON == False:
+            # Initialize the logging environment with the path to the input file
+            initialize_logging_environment(minibar_fastq_gz_path)
+            LOGGING_ON == True
+        
         ngsid_output_dir = minibar_fastq_gz_path.replace(".gz","").replace(".fastq","")
         
         minibar_path = find_file("minibar.py")
@@ -107,6 +113,11 @@ def gui_ngsid_prep():
         pass
     else:
         log_print( "NGSpeciesID preparation started...\n")
+        
+        if LOGGING_ON == False:
+            # Initialize the logging environment with the path to the input file
+            initialize_logging_environment(ngsid_folder_path)
+            LOGGING_ON == True
         
         sample_size = sample_size_entry.get()
         min_length_bp = min_length_bp_entry.get()
@@ -140,6 +151,11 @@ def gui_summary_prep():
         pass
     else:
         log_print( "MycoMap Summarize preparation started...\n")
+        
+        if LOGGING_ON == False:
+            # Initialize the logging environment with the path to the input file
+            initialize_logging_environment(summary_folder_path)
+            LOGGING_ON == True
         
         hap_phase_bool = hap_phase_var.get()
         summary_output_dir = minibar_file_path_entry.get().replace(".fastq.gz", "")
