@@ -129,7 +129,9 @@ def gui_ngsid_prep():
         ngsid_output_dir = ngsid_folder_path.replace(".fastq.gz", "")
         ngsid_primers_path = f"{os.path.dirname(ngsid_folder_path)}/primers.txt"
         
-        run_ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, summary_ric_cutoff, CPU_THREADS)
+        medaka_shell_path = find_file("run_medaka.sh")
+        
+        run_ngsid_prep(ngsid_primers_path, input_fastq_file, sample_size, min_length_bp, max_std_dev_bp, hap_phase_bool, ngsid_output_dir, summary_ric_cutoff, medaka_shell_path, CPU_THREADS)
 
 # GUI function to trigger NGSpeciesID preparation  
 def gui_summary_prep():
