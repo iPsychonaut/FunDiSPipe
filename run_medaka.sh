@@ -1,9 +1,16 @@
 #!/bin/bash
 
-# Source the conda initialization script
-source ~/mambaforge/etc/profile.d/conda.sh
+# Find and source the conda.sh script
+CONDA_SH_PATH=$(find ~/ -name conda.sh 2>/dev/null | head -n 1)
+if [ -n "$CONDA_SH_PATH" ]; then
+    source "$CONDA_SH_PATH"
+else
+    echo "conda.sh not found, please ensure Conda is installed."
+    exit 1
+fi
 
 # Activate the medaka conda environment
+conda init medaka
 conda activate medaka
 
 # Define your variables
