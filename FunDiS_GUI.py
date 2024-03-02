@@ -86,7 +86,7 @@ def gui_minibar_prep():
         
         ngsid_output_dir = minibar_fastq_gz_path.replace(".gz","").replace(".fastq","")
         
-        minibar_path = find_file("minibar.py")
+        minibar_path = find_file("minibar_og.py")
        
         minibar_index_path = f"{os.path.dirname(minibar_fastq_gz_path)}/Index.txt"
         
